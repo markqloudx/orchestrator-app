@@ -2,103 +2,111 @@ from flask import Flask, render_template, request, jsonify
 import os
 import json
 import requests
-import base64
-from datetime import datetime
 import sqlite3
-
-# ============================================================
-# LOAD ENVIRONMENT VARIABLES FROM .env
-# ============================================================
-
-# Try to load .env file if it exists (local development)
-try:
-    with open('.env', 'r') as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith('#'):
-                key, value = line.split('=', 1)
-                os.environ[key] = value
-    print("✅ Loaded .env file")
-except FileNotFoundError:
-    print("ℹ️ No .env file found - using system environment variables")
-
-# ============================================================
-# CONFIGURATION - Reads from Environment Variables
-# ============================================================
-
-DATABRICKS_HOST = os.environ.get('DATABRICKS_HOST', '')
-DATABRICKS_TOKEN = os.environ.get('DATABRICKS_TOKEN', '')
-GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
-GITHUB_DEV_REPO = os.environ.get('GITHUB_DEV_REPO', '')
-GITHUB_PROD_REPO = os.environ.get('GITHUB_PROD_REPO', '')
-
-print(f"🔑 GitHub configured: {bool(GITHUB_TOKEN)}")
-print(f"🔑 Databricks configured: {bool(DATABRICKS_TOKEN)}")
-print(f"📁 GitHub DEV Repo: {GITHUB_DEV_REPO}")
-print(f"📁 GitHub PROD Repo: {GITHUB_PROD_REPO}")
-
-# ============================================================
-# FLASK APP
-# ============================================================
+import random
+from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'default-secret-key-change-me')
+app.secret_key = os.environ.get('SECRET_KEY', 'default-secret-key')
 
 # ============================================================
-# DATABASE - Uses current directory (NO /dbfs)
+# ⚠️ GITHUB TOKEN - HARDCODED FOR DEMO
 # ============================================================
 
-# Get the directory where app.py is located
+# Replace this with your actual GitHub token
+GITHUB_TOKEN = 'ghp_YOUR_ACTUAL_TOKEN_HERE'  # ← PUT YOUR TOKEN HERE!
+
+# ============================================================
+# DATABASE
+# ============================================================
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'orchestrator.db')
 
-print(f"📁 Database path: {DB_PATH}")
+if os.path.exists(DB_PATH):
+    try:
+        os.remove(DB_PATH)
+        print("🗑️ Fresh database created!")
+    except:
+        pass
 
 def get_db():
-    """Get database connection"""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
-    """Initialize database with tables"""
     try:
         with get_db() as conn:
+            # Projects table
             conn.execute('''
-                CREATE TABLE IF NOT EXISTS change_requests (
+                CREATE TABLE IF NOT EXISTS projects (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    project_id TEXT NOT NULL,
-                    change_type TEXT NOT NULL,
-                    description TEXT NOT NULL,
-                    files_changed TEXT,
+                    project_id TEXT NOT NULL UNIQUE,
+                    name TEXT NOT NULL,
+                    source_repo_url TEXT,
+                    source_repo_name TEXT,
+                    target_repo_url TEXT,
+                    target_repo_name TEXT,
+                    branch TEXT DEFAULT 'main',
+                    source_status TEXT DEFAULT 'PENDING',
+                    target_status TEXT DEFAULT 'PENDING',
                     status TEXT DEFAULT 'PENDING',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    approved_at TIMESTAMP,
-                    approved_by TEXT,
-                    rejected_reason TEXT,
-                    deployed_at TIMESTAMP,
-                    deployed_by TEXT
-                )
-            ''')
-            
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS deployment_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    change_id INTEGER,
-                    action TEXT,
-                    status TEXT,
-                    details TEXT,
+                    last_sync TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            
+            # Changes table
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS changes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    change_id TEXT NOT NULL UNIQUE,
+                    project_id TEXT NOT NULL,
+                    pr_number INTEGER,
+                    pr_url TEXT,
+                    pr_title TEXT,
+                    pr_author TEXT,
+                    commit_sha TEXT,
+                    description TEXT,
+                    files_changed TEXT,
+                    source_branch TEXT DEFAULT 'main',
+                    target_branch TEXT DEFAULT 'main',
+                    approval_status TEXT DEFAULT 'PENDING',
+                    deployment_status TEXT DEFAULT 'BLOCKED',
+                    github_action_run_id INTEGER,
+                    github_action_status TEXT DEFAULT 'NOT_TRIGGERED',
+                    github_action_url TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    approved_at TIMESTAMP,
+                    approved_by TEXT,
+                    merged_at TIMESTAMP,
+                    merged_by TEXT,
+                    rejected_reason TEXT,
+                    FOREIGN KEY (project_id) REFERENCES projects(project_id)
+                )
+            ''')
+            
+            # Audit Trail
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS audit_trail (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    event TEXT,
+                    change_id TEXT,
+                    project_id TEXT,
+                    result TEXT,
+                    details TEXT
+                )
+            ''')
+            
             conn.commit()
-            print("✅ Database initialized successfully")
+            print("✅ Database initialized")
             return True
     except Exception as e:
-        print(f"❌ Database initialization error: {e}")
+        print(f"❌ DB init error: {e}")
         return False
 
-# Initialize database
 init_db()
 
 # ============================================================
@@ -112,281 +120,493 @@ class GitHubClient:
             'Authorization': f'token {token}',
             'Accept': 'application/vnd.github.v3+json'
         }
+        self.is_configured = bool(token)
     
-    def get_all_files(self, repo_name, branch='main'):
-        url = f'https://api.github.com/repos/{repo_name}/git/trees/{branch}?recursive=1'
-        try:
-            response = requests.get(url, headers=self.headers)
-            if response.status_code == 200:
-                data = response.json()
-                return [f for f in data.get('tree', []) if f['type'] == 'blob']
-            return []
-        except Exception as e:
-            print(f"Error getting files: {e}")
-            return []
-    
-    def get_file_content(self, repo_name, file_path, branch='main'):
-        url = f'https://api.github.com/repos/{repo_name}/contents/{file_path}?ref={branch}'
-        try:
-            response = requests.get(url, headers=self.headers)
-            if response.status_code == 200:
-                data = response.json()
-                content = base64.b64decode(data['content']).decode('utf-8')
-                return {'content': content, 'sha': data['sha']}
-            return None
-        except Exception as e:
-            print(f"Error getting file content: {e}")
-            return None
-    
-    def compare_repos(self, dev_repo, prod_repo, branch='main'):
-        dev_files = self.get_all_files(dev_repo, branch)
-        prod_files = self.get_all_files(prod_repo, branch)
-        
-        dev_paths = {f['path'] for f in dev_files}
-        prod_paths = {f['path'] for f in prod_files}
-        
-        changes = []
-        
-        for path in dev_paths - prod_paths:
-            changes.append({'file': path, 'type': 'new'})
-        
-        for path in dev_paths & prod_paths:
-            dev_content = self.get_file_content(dev_repo, path, branch)
-            prod_content = self.get_file_content(prod_repo, path, branch)
-            if dev_content and prod_content:
-                if dev_content['content'] != prod_content['content']:
-                    changes.append({'file': path, 'type': 'modified'})
-        
-        for path in prod_paths - dev_paths:
-            changes.append({'file': path, 'type': 'deleted'})
-        
-        return changes
-    
-    def sync_to_prod(self, dev_repo, prod_repo, file_path, branch='main'):
-        dev_content = self.get_file_content(dev_repo, file_path, branch)
-        if not dev_content:
+    def verify_repo(self, repo_name):
+        if not self.is_configured:
             return False
-        
-        url = f'https://api.github.com/repos/{prod_repo}/contents/{file_path}'
-        
         try:
-            response = requests.get(url, headers=self.headers)
-            if response.status_code == 200:
-                prod_data = response.json()
-                payload = {
-                    'message': f'[BOT] Sync {file_path} from DEV',
-                    'content': base64.b64encode(dev_content['content'].encode()).decode(),
-                    'sha': prod_data['sha'],
-                    'branch': branch
+            r = requests.get(f'https://api.github.com/repos/{repo_name}', headers=self.headers)
+            print(f"🔍 Verifying repo {repo_name}: {r.status_code}")
+            return r.status_code == 200
+        except Exception as e:
+            print(f"❌ Error verifying repo: {e}")
+            return False
+    
+    def get_pull_requests(self, repo_name, state='open'):
+        if not self.is_configured:
+            return []
+        try:
+            r = requests.get(
+                f'https://api.github.com/repos/{repo_name}/pulls?state={state}&per_page=100',
+                headers=self.headers
+            )
+            if r.status_code == 200:
+                return r.json()
+            return []
+        except:
+            return []
+    
+    def get_pr_files(self, repo_name, pr_number):
+        if not self.is_configured:
+            return []
+        try:
+            r = requests.get(
+                f'https://api.github.com/repos/{repo_name}/pulls/{pr_number}/files',
+                headers=self.headers
+            )
+            if r.status_code == 200:
+                return r.json()
+            return []
+        except:
+            return []
+    
+    def trigger_github_action(self, repo_name, workflow_id='sync.yml', ref='main'):
+        if not self.is_configured:
+            return False
+        url = f'https://api.github.com/repos/{repo_name}/actions/workflows/{workflow_id}/dispatches'
+        payload = {'ref': ref}
+        try:
+            r = requests.post(url, headers=self.headers, json=payload)
+            print(f"🚀 Trigger GitHub Action: {r.status_code}")
+            return r.status_code == 204
+        except Exception as e:
+            print(f"❌ Error triggering action: {e}")
+            return False
+    
+    def get_workflow_runs(self, repo_name, limit=1):
+        if not self.is_configured:
+            return []
+        url = f'https://api.github.com/repos/{repo_name}/actions/runs'
+        try:
+            r = requests.get(url, headers=self.headers, params={'per_page': limit})
+            if r.status_code == 200:
+                return r.json().get('workflow_runs', [])
+            return []
+        except:
+            return []
+    
+    def get_workflow_run_status(self, repo_name, run_id):
+        if not self.is_configured:
+            return None
+        url = f'https://api.github.com/repos/{repo_name}/actions/runs/{run_id}'
+        try:
+            r = requests.get(url, headers=self.headers)
+            if r.status_code == 200:
+                data = r.json()
+                return {
+                    'status': data.get('status'),
+                    'conclusion': data.get('conclusion'),
+                    'html_url': data.get('html_url')
                 }
-                response = requests.put(url, headers=self.headers, json=payload)
-            else:
-                payload = {
-                    'message': f'[BOT] Create {file_path} from DEV',
-                    'content': base64.b64encode(dev_content['content'].encode()).decode(),
-                    'branch': branch
-                }
-                response = requests.put(url, headers=self.headers, json=payload)
+            return None
+        except:
+            return None
+    
+    def sync_prs_to_db(self, source_repo, project_id):
+        if not self.is_configured:
+            return 0
+        prs = self.get_pull_requests(source_repo)
+        synced_count = 0
+        
+        with get_db() as conn:
+            for pr in prs:
+                existing = conn.execute(
+                    'SELECT * FROM changes WHERE pr_number = ? AND project_id = ?',
+                    (pr['number'], project_id)
+                ).fetchone()
+                
+                if not existing:
+                    files = self.get_pr_files(source_repo, pr['number'])
+                    files_changed = [{'file': f['filename'], 'type': 'modified'} for f in files]
+                    
+                    change_id = f"CHG-{datetime.now().strftime('%Y%m%d')}-{random.randint(1000, 9999)}"
+                    
+                    conn.execute('''
+                        INSERT INTO changes 
+                        (change_id, project_id, pr_number, pr_url, pr_title, pr_author, 
+                         commit_sha, description, files_changed, source_branch, target_branch, 
+                         approval_status, github_action_status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'NOT_TRIGGERED')
+                    ''', (
+                        change_id,
+                        project_id,
+                        pr['number'],
+                        pr['html_url'],
+                        pr['title'],
+                        pr['user']['login'],
+                        pr['head']['sha'],
+                        pr['body'] or '',
+                        json.dumps(files_changed),
+                        pr['head']['ref'],
+                        pr['base']['ref']
+                    ))
+                    
+                    synced_count += 1
             
-            return response.status_code in [200, 201]
-        except Exception as e:
-            print(f"Error syncing file: {e}")
-            return False
+            conn.execute('''
+                UPDATE projects SET last_sync = CURRENT_TIMESTAMP WHERE project_id = ?
+            ''', (project_id,))
+            conn.commit()
+        
+        return synced_count
+
+github_client = GitHubClient(GITHUB_TOKEN) if GITHUB_TOKEN else None
 
 # ============================================================
-# ROUTES
+# PAGE ROUTES
 # ============================================================
 
 @app.route('/')
 def index():
     with get_db() as conn:
-        pending = conn.execute("SELECT COUNT(*) FROM change_requests WHERE status = 'PENDING'").fetchone()[0]
-        approved = conn.execute("SELECT COUNT(*) FROM change_requests WHERE status = 'APPROVED'").fetchone()[0]
-        deployed = conn.execute("SELECT COUNT(*) FROM change_requests WHERE status = 'DEPLOYED'").fetchone()[0]
-        total = conn.execute("SELECT COUNT(*) FROM change_requests").fetchone()[0]
-        recent = conn.execute('SELECT * FROM change_requests ORDER BY created_at DESC LIMIT 5').fetchall()
+        projects = conn.execute('SELECT * FROM projects ORDER BY created_at DESC').fetchall()
+        changes = conn.execute('SELECT * FROM changes ORDER BY created_at DESC LIMIT 10').fetchall()
+        pending = conn.execute("SELECT COUNT(*) FROM changes WHERE approval_status = 'PENDING'").fetchone()[0]
+        approved = conn.execute("SELECT COUNT(*) FROM changes WHERE approval_status = 'APPROVED'").fetchone()[0]
+        merged = conn.execute("SELECT COUNT(*) FROM changes WHERE deployment_status = 'MERGED'").fetchone()[0]
     
     return render_template('index.html',
+                         projects=projects,
+                         changes=changes,
                          pending_count=pending,
                          approved_count=approved,
-                         deployed_count=deployed,
-                         total_count=total,
-                         recent_changes=recent,
-                         github_dev=GITHUB_DEV_REPO,
-                         github_prod=GITHUB_PROD_REPO)
+                         merged_count=merged,
+                         github_configured=bool(GITHUB_TOKEN))
+
+@app.route('/projects')
+def projects_page():
+    with get_db() as conn:
+        projects = conn.execute('SELECT * FROM projects ORDER BY created_at DESC').fetchall()
+    return render_template('projects.html', projects=projects, github_configured=bool(GITHUB_TOKEN))
 
 @app.route('/changes')
-def changes():
+def changes_page():
     with get_db() as conn:
-        all_changes = conn.execute('SELECT * FROM change_requests ORDER BY created_at DESC').fetchall()
-    return render_template('changes.html', changes=all_changes)
+        changes = conn.execute('SELECT * FROM changes ORDER BY created_at DESC').fetchall()
+        projects = conn.execute('SELECT project_id, name, source_repo_name, target_repo_name FROM projects').fetchall()
+    return render_template('changes.html', changes=changes, projects=projects, github_configured=bool(GITHUB_TOKEN))
 
 @app.route('/approvals')
-def approvals():
+def approvals_page():
     with get_db() as conn:
-        pending = conn.execute('SELECT * FROM change_requests WHERE status = "PENDING" ORDER BY created_at ASC').fetchall()
-    return render_template('approvals.html', changes=pending)
+        pending = conn.execute('SELECT * FROM changes WHERE approval_status = "PENDING" ORDER BY created_at ASC').fetchall()
+        projects = conn.execute('SELECT project_id, name FROM projects').fetchall()
+    return render_template('approvals.html', changes=pending, projects=projects)
 
-@app.route('/health')
-def health():
-    return jsonify({
-        'status': 'healthy',
-        'db_path': DB_PATH,
-        'github_dev': GITHUB_DEV_REPO,
-        'github_prod': GITHUB_PROD_REPO,
-        'databricks_configured': bool(DATABRICKS_TOKEN),
-        'github_configured': bool(GITHUB_TOKEN)
-    })
+@app.route('/deployment')
+def deployment_page():
+    return render_template('deployment.html')
 
 # ============================================================
 # API ROUTES
 # ============================================================
 
-@app.route('/api/detect-changes', methods=['POST'])
-def detect_changes():
+@app.route('/api/projects', methods=['GET'])
+def api_get_projects():
+    with get_db() as conn:
+        projects = conn.execute('SELECT * FROM projects ORDER BY created_at DESC').fetchall()
+        return jsonify({'success': True, 'data': [dict(p) for p in projects]})
+
+@app.route('/api/projects', methods=['POST'])
+def api_create_project():
     try:
-        if not GITHUB_TOKEN or not GITHUB_DEV_REPO or not GITHUB_PROD_REPO:
-            return jsonify({'success': False, 'error': 'GitHub configuration missing'}), 400
+        data = request.json
         
-        client = GitHubClient(GITHUB_TOKEN)
-        changes = client.compare_repos(GITHUB_DEV_REPO, GITHUB_PROD_REPO)
+        if not data.get('project_id'):
+            return jsonify({'success': False, 'error': 'project_id is required'}), 400
+        if not data.get('name'):
+            return jsonify({'success': False, 'error': 'name is required'}), 400
+        if not data.get('source_repo_url'):
+            return jsonify({'success': False, 'error': 'source_repo_url is required'}), 400
+        if not data.get('target_repo_url'):
+            return jsonify({'success': False, 'error': 'target_repo_url is required'}), 400
         
-        return jsonify({'success': True, 'changes': changes, 'count': len(changes)})
+        with get_db() as conn:
+            existing = conn.execute('SELECT * FROM projects WHERE project_id = ?', (data['project_id'],)).fetchone()
+            if existing:
+                return jsonify({'success': False, 'error': 'Project ID already exists'}), 400
+            
+            source_url = data['source_repo_url']
+            target_url = data['target_repo_url']
+            
+            source_name = source_url.replace('https://github.com/', '').replace('.git', '')
+            target_name = target_url.replace('https://github.com/', '').replace('.git', '')
+            
+            source_valid = False
+            target_valid = False
+            if github_client and github_client.is_configured:
+                source_valid = github_client.verify_repo(source_name)
+                target_valid = github_client.verify_repo(target_name)
+            
+            source_status = 'CONNECTED' if source_valid else 'NOT CONNECTED'
+            target_status = 'CONNECTED' if target_valid else 'NOT CONNECTED'
+            overall_status = 'CONNECTED' if (source_valid and target_valid) else 'PARTIAL'
+            
+            conn.execute('''
+                INSERT INTO projects 
+                (project_id, name, source_repo_url, source_repo_name, target_repo_url, target_repo_name, 
+                 branch, source_status, target_status, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                data['project_id'],
+                data['name'],
+                source_url,
+                source_name,
+                target_url,
+                target_name,
+                data.get('branch', 'main'),
+                source_status,
+                target_status,
+                overall_status
+            ))
+            conn.commit()
+            
+            project = conn.execute('SELECT * FROM projects WHERE project_id = ?', (data['project_id'],)).fetchone()
+            
+            synced = 0
+            if github_client and github_client.is_configured and source_valid:
+                synced = github_client.sync_prs_to_db(source_name, data['project_id'])
+            
+            return jsonify({'success': True, 'data': dict(project), 'prs_synced': synced})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/create-change-request', methods=['POST'])
-def create_change_request():
+@app.route('/api/projects/<project_id>/verify', methods=['GET'])
+def api_verify_project(project_id):
     try:
-        data = request.json
-        files_changed = json.dumps(data.get('files_changed', []))
-        
         with get_db() as conn:
-            cursor = conn.execute('''
-                INSERT INTO change_requests 
-                (project_id, change_type, description, files_changed, status)
-                VALUES (?, ?, ?, ?, 'PENDING')
-            ''', ('PRJ-001', 'sync', data.get('description', 'Sync from DEV to PROD'), files_changed))
+            project = conn.execute('SELECT * FROM projects WHERE project_id = ?', (project_id,)).fetchone()
+            if not project:
+                return jsonify({'success': False, 'error': 'Project not found'}), 404
             
-            change_id = cursor.lastrowid
-            conn.commit()
+            if not github_client or not github_client.is_configured:
+                return jsonify({
+                    'success': False, 
+                    'error': 'GitHub not configured. Please set GITHUB_TOKEN.'
+                }), 400
             
-            change = conn.execute('SELECT * FROM change_requests WHERE id = ?', (change_id,)).fetchone()
+            source_name = project['source_repo_name']
+            target_name = project['target_repo_name']
+            
+            source_valid = github_client.verify_repo(source_name)
+            target_valid = github_client.verify_repo(target_name)
+            
+            source_status = 'CONNECTED' if source_valid else 'NOT CONNECTED'
+            target_status = 'CONNECTED' if target_valid else 'NOT CONNECTED'
+            overall_status = 'CONNECTED' if (source_valid and target_valid) else 'PARTIAL'
             
             conn.execute('''
-                INSERT INTO deployment_logs (change_id, action, status, details)
-                VALUES (?, 'create_change_request', 'PENDING', 'Change request created')
-            ''', (change_id,))
+                UPDATE projects 
+                SET source_status = ?, target_status = ?, status = ?
+                WHERE project_id = ?
+            ''', (source_status, target_status, overall_status, project_id))
             conn.commit()
-        
-        return jsonify({'success': True, 'change': dict(change)})
+            
+            synced = 0
+            if source_valid:
+                synced = github_client.sync_prs_to_db(source_name, project_id)
+            
+            return jsonify({
+                'success': True,
+                'source_valid': source_valid,
+                'source_status': source_status,
+                'target_valid': target_valid,
+                'target_status': target_status,
+                'status': overall_status,
+                'prs_synced': synced
+            })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/approve-change/<int:change_id>', methods=['POST'])
-def approve_change(change_id):
+@app.route('/api/projects/<project_id>/sync-prs', methods=['POST'])
+def api_sync_prs(project_id):
     try:
-        data = request.json
-        approver = data.get('approver', 'databricks-user')
-        
         with get_db() as conn:
-            conn.execute('''
-                UPDATE change_requests 
-                SET status = 'APPROVED', approved_at = CURRENT_TIMESTAMP, approved_by = ?
-                WHERE id = ? AND status = 'PENDING'
-            ''', (approver, change_id))
+            project = conn.execute('SELECT * FROM projects WHERE project_id = ?', (project_id,)).fetchone()
+            if not project:
+                return jsonify({'success': False, 'error': 'Project not found'}), 404
             
-            conn.execute('''
-                INSERT INTO deployment_logs (change_id, action, status, details)
-                VALUES (?, 'approve_change', 'APPROVED', ?)
-            ''', (change_id, f'Approved by {approver}'))
-            conn.commit()
+            if not github_client or not github_client.is_configured:
+                return jsonify({
+                    'success': False, 
+                    'error': 'GitHub not configured. Please set GITHUB_TOKEN.'
+                }), 400
             
-            change = conn.execute('SELECT * FROM change_requests WHERE id = ?', (change_id,)).fetchone()
-        
-        return jsonify({'success': True, 'change': dict(change)})
+            source_name = project['source_repo_name']
+            synced = github_client.sync_prs_to_db(source_name, project_id)
+            
+            return jsonify({'success': True, 'synced': synced})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/reject-change/<int:change_id>', methods=['POST'])
-def reject_change(change_id):
-    try:
-        data = request.json
-        approver = data.get('approver', 'databricks-user')
-        reason = data.get('reason', 'No reason provided')
-        
-        with get_db() as conn:
-            conn.execute('''
-                UPDATE change_requests 
-                SET status = 'REJECTED', approved_at = CURRENT_TIMESTAMP, approved_by = ?, rejected_reason = ?
-                WHERE id = ? AND status = 'PENDING'
-            ''', (approver, reason, change_id))
-            
-            conn.execute('''
-                INSERT INTO deployment_logs (change_id, action, status, details)
-                VALUES (?, 'reject_change', 'REJECTED', ?)
-            ''', (change_id, f'Rejected by {approver}: {reason}'))
-            conn.commit()
-            
-            change = conn.execute('SELECT * FROM change_requests WHERE id = ?', (change_id,)).fetchone()
-        
-        return jsonify({'success': True, 'change': dict(change)})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+@app.route('/api/changes', methods=['GET'])
+def api_get_changes():
+    with get_db() as conn:
+        changes = conn.execute('SELECT * FROM changes ORDER BY created_at DESC').fetchall()
+        return jsonify({'success': True, 'data': [dict(c) for c in changes]})
 
-@app.route('/api/deploy-change/<int:change_id>', methods=['POST'])
-def deploy_change(change_id):
+@app.route('/api/changes/<change_id>/approve', methods=['POST'])
+def api_approve_change(change_id):
     try:
-        data = request.json
-        deployer = data.get('deployer', 'databricks-user')
-        
         with get_db() as conn:
-            change = conn.execute('SELECT * FROM change_requests WHERE id = ?', (change_id,)).fetchone()
-            
+            change = conn.execute('SELECT * FROM changes WHERE change_id = ?', (change_id,)).fetchone()
             if not change:
                 return jsonify({'success': False, 'error': 'Change not found'}), 404
             
-            if change['status'] != 'APPROVED':
-                return jsonify({'success': False, 'error': 'Change must be approved first'}), 400
-            
-            sync_results = []
-            if GITHUB_TOKEN and GITHUB_DEV_REPO and GITHUB_PROD_REPO:
-                client = GitHubClient(GITHUB_TOKEN)
-                files_changed = json.loads(change['files_changed']) if change['files_changed'] else []
-                
-                for file_info in files_changed:
-                    file_path = file_info.get('file')
-                    if file_path:
-                        success = client.sync_to_prod(GITHUB_DEV_REPO, GITHUB_PROD_REPO, file_path)
-                        sync_results.append({'file': file_path, 'success': success})
+            if change['approval_status'] != 'PENDING':
+                return jsonify({'success': False, 'error': 'Change already ' + change['approval_status']}), 400
             
             conn.execute('''
-                UPDATE change_requests 
-                SET status = 'DEPLOYED', deployed_at = CURRENT_TIMESTAMP, deployed_by = ?
-                WHERE id = ?
-            ''', (deployer, change_id))
+                UPDATE changes 
+                SET approval_status = 'APPROVED', 
+                    approved_at = CURRENT_TIMESTAMP, 
+                    approved_by = ?
+                WHERE change_id = ?
+            ''', ('databricks-user', change_id))
             
             conn.execute('''
-                INSERT INTO deployment_logs (change_id, action, status, details)
-                VALUES (?, 'deploy_to_prod', 'DEPLOYED', ?)
-            ''', (change_id, f'Deployed by {deployer}. Synced {len(sync_results)} files.'))
+                INSERT INTO audit_trail (event, change_id, project_id, result, details)
+                VALUES (?, ?, ?, ?, ?)
+            ''', ('Change Approved', change_id, change['project_id'], 'APPROVED', 'Change approved'))
             conn.commit()
             
-            change = conn.execute('SELECT * FROM change_requests WHERE id = ?', (change_id,)).fetchone()
-        
-        return jsonify({'success': True, 'change': dict(change), 'sync_results': sync_results})
+            change = conn.execute('SELECT * FROM changes WHERE change_id = ?', (change_id,)).fetchone()
+            return jsonify({'success': True, 'data': dict(change)})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/deployment-logs')
-def get_deployment_logs():
-    with get_db() as conn:
-        logs = conn.execute('SELECT * FROM deployment_logs ORDER BY created_at DESC LIMIT 50').fetchall()
-    return jsonify({'success': True, 'logs': [dict(log) for log in logs]})
+@app.route('/api/changes/<change_id>/reject', methods=['POST'])
+def api_reject_change(change_id):
+    try:
+        data = request.json or {}
+        reason = data.get('reason', 'No reason provided')
+        
+        with get_db() as conn:
+            change = conn.execute('SELECT * FROM changes WHERE change_id = ?', (change_id,)).fetchone()
+            if not change:
+                return jsonify({'success': False, 'error': 'Change not found'}), 404
+            
+            if change['approval_status'] != 'PENDING':
+                return jsonify({'success': False, 'error': 'Change already ' + change['approval_status']}), 400
+            
+            conn.execute('''
+                UPDATE changes 
+                SET approval_status = 'REJECTED', 
+                    rejected_reason = ?,
+                    approved_at = CURRENT_TIMESTAMP, 
+                    approved_by = ?
+                WHERE change_id = ?
+            ''', (reason, 'databricks-user', change_id))
+            
+            conn.execute('''
+                INSERT INTO audit_trail (event, change_id, project_id, result, details)
+                VALUES (?, ?, ?, ?, ?)
+            ''', ('Change Rejected', change_id, change['project_id'], 'REJECTED', reason))
+            conn.commit()
+            
+            change = conn.execute('SELECT * FROM changes WHERE change_id = ?', (change_id,)).fetchone()
+            return jsonify({'success': True, 'data': dict(change)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/test')
-def test():
-    return render_template('test.html')
+@app.route('/api/changes/<change_id>/merge', methods=['POST'])
+def api_merge_change(change_id):
+    try:
+        with get_db() as conn:
+            change = conn.execute('SELECT * FROM changes WHERE change_id = ?', (change_id,)).fetchone()
+            if not change:
+                return jsonify({'success': False, 'error': 'Change not found'}), 404
+            
+            if change['approval_status'] != 'APPROVED':
+                return jsonify({'success': False, 'error': 'Change must be approved before merging'}), 400
+            
+            if change['deployment_status'] == 'MERGED':
+                return jsonify({'success': False, 'error': 'Change already merged'}), 400
+            
+            project = conn.execute('SELECT * FROM projects WHERE project_id = ?', (change['project_id'],)).fetchone()
+            target_repo = project['target_repo_name']
+            
+            action_triggered = False
+            if github_client and github_client.is_configured:
+                action_triggered = github_client.trigger_github_action(target_repo, 'sync.yml', 'main')
+                
+                if action_triggered:
+                    runs = github_client.get_workflow_runs(target_repo, 1)
+                    if runs:
+                        run = runs[0]
+                        conn.execute('''
+                            UPDATE changes 
+                            SET github_action_run_id = ?,
+                                github_action_url = ?,
+                                github_action_status = 'RUNNING'
+                            WHERE change_id = ?
+                        ''', (run.get('id'), run.get('html_url'), change_id))
+            
+            conn.execute('''
+                UPDATE changes 
+                SET deployment_status = 'MERGED', 
+                    merged_at = CURRENT_TIMESTAMP, 
+                    merged_by = ?
+                WHERE change_id = ?
+            ''', ('databricks-user', change_id))
+            
+            conn.execute('''
+                INSERT INTO audit_trail (event, change_id, project_id, result, details)
+                VALUES (?, ?, ?, ?, ?)
+            ''', ('Change Merged - Action Triggered', change_id, change['project_id'], 'MERGED', 'GitHub Action triggered'))
+            conn.commit()
+            
+            change = conn.execute('SELECT * FROM changes WHERE change_id = ?', (change_id,)).fetchone()
+            return jsonify({
+                'success': True, 
+                'data': dict(change),
+                'action_triggered': action_triggered
+            })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/changes/<change_id>/action-status', methods=['GET'])
+def api_get_action_status(change_id):
+    with get_db() as conn:
+        change = conn.execute('SELECT * FROM changes WHERE change_id = ?', (change_id,)).fetchone()
+        if not change:
+            return jsonify({'success': False, 'error': 'Change not found'}), 404
+        
+        if not change['github_action_run_id']:
+            return jsonify({'success': True, 'status': 'NOT_TRIGGERED'})
+        
+        if not github_client or not github_client.is_configured:
+            return jsonify({'success': True, 'status': change['github_action_status']})
+        
+        project = conn.execute('SELECT * FROM projects WHERE project_id = ?', (change['project_id'],)).fetchone()
+        target_repo = project['target_repo_name']
+        
+        status_data = github_client.get_workflow_run_status(target_repo, change['github_action_run_id'])
+        
+        if status_data:
+            status = status_data.get('status', 'UNKNOWN')
+            conclusion = status_data.get('conclusion', '')
+            
+            if status == 'completed':
+                display_status = 'SUCCESS' if conclusion == 'success' else 'FAILED'
+            else:
+                display_status = status.upper()
+            
+            conn.execute('''
+                UPDATE changes 
+                SET github_action_status = ?
+                WHERE change_id = ?
+            ''', (display_status, change_id))
+            conn.commit()
+            
+            return jsonify({
+                'success': True,
+                'status': display_status,
+                'url': status_data.get('html_url')
+            })
+        
+        return jsonify({'success': True, 'status': change['github_action_status']})
 
 # ============================================================
 # RUN APP
@@ -394,10 +614,14 @@ def test():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    print(f"🚀 Starting app on port {port}")
-    print(f"📁 Database: {DB_PATH}")
+    print("=" * 60)
+    print("🚀 GIT TO GIT CI/CD ORCHESTRATOR")
+    print("=" * 60)
+    print(f"📡 Server running on port: {port}")
     print(f"🔑 GitHub configured: {bool(GITHUB_TOKEN)}")
-    print(f"🔑 Databricks configured: {bool(DATABRICKS_TOKEN)}")
-    print(f"📁 GitHub DEV Repo: {GITHUB_DEV_REPO}")
-    print(f"📁 GitHub PROD Repo: {GITHUB_PROD_REPO}")
+    if GITHUB_TOKEN:
+        print(f"🔑 Token: {GITHUB_TOKEN[:10]}...{GITHUB_TOKEN[-4:]}")
+    else:
+        print("⚠️  WARNING: GITHUB_TOKEN not set!")
+    print("=" * 60)
     app.run(host='0.0.0.0', port=port, debug=False)
