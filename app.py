@@ -14,7 +14,7 @@ app.secret_key = os.environ.get('SECRET_KEY', 'default-secret-key')
 # ============================================================
 
 # Replace this with your actual GitHub token
-GITHUB_TOKEN = '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'  # ← PUT YOUR TOKEN HERE!
+GITHUB_TOKEN = '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'  # ← PUT YOUR TOKEN HERE!
 
 # ============================================================
 # DATABASE
