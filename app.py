@@ -11,27 +11,12 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default-secret-key')
 
 # ============================================================
-# ⚠️ PUT YOUR ACTUAL GITHUB TOKEN HERE
+# 🔑 GITHUB TOKEN - PUT YOUR ACTUAL TOKEN HERE
 # ============================================================
 
-# 🔑 PASTE YOUR TOKEN BETWEEN THE QUOTES
-GITHUB_TOKEN = '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'  # ← REPLACE THIS
-
-# ============================================================
-# DEBUG - Print token info
-# ============================================================
-
-print("=" * 70)
-print("🔑 GITHUB TOKEN DEBUG")
-print("=" * 70)
-print(f"Token exists: {bool(GITHUB_TOKEN)}")
-if GITHUB_TOKEN:
-    print(f"Token length: {len(GITHUB_TOKEN)}")
-    print(f"Token starts with 'ghp_': {GITHUB_TOKEN.startswith('ghp_')}")
-    print(f"Token: {GITHUB_TOKEN[:8]}...{GITHUB_TOKEN[-4:]}")
-else:
-    print("❌ TOKEN IS EMPTY!")
-print("=" * 70)
+# Create a new token at: https://github.com/settings/tokens
+# Select ALL repo scopes, set expiration to "No expiration"
+GITHUB_TOKEN = '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'  # ← REPLACE THIS
 
 # ============================================================
 # DATABASE
@@ -124,116 +109,130 @@ def init_db():
 init_db()
 
 # ============================================================
-# GITHUB CLIENT WITH FULL ERROR LOGGING
+# GITHUB CLIENT - WORKING VERSION
 # ============================================================
 
 class GitHubClient:
     def __init__(self, token):
         self.token = token
-        self.headers = {
-            'Authorization': f'token {token}',
-            'Accept': 'application/vnd.github.v3+json'
-        }
-        self.is_configured = bool(token) and token.startswith('ghp_')
-        print(f"🔑 GitHub Client initialized: {self.is_configured}")
+        self.is_configured = bool(token) and (token.startswith('ghp_') or token.startswith('github_pat_'))
+        print(f"🔑 Token configured: {self.is_configured}")
+        if self.is_configured:
+            print(f"🔑 Token: {token[:10]}...{token[-4:]}")
     
     def verify_repo(self, repo_name):
         if not self.is_configured:
-            print(f"❌ GitHub not configured - cannot verify {repo_name}")
+            print(f"❌ GitHub not configured")
             return False
+        
         try:
             url = f'https://api.github.com/repos/{repo_name}'
+            headers = {
+                'Authorization': f'token {self.token}',
+                'Accept': 'application/vnd.github.v3+json'
+            }
             print(f"🔍 Verifying: {url}")
-            print(f"🔑 Token used: {self.token[:10]}...{self.token[-4:] if self.token else 'EMPTY'}")
+            response = requests.get(url, headers=headers)
+            print(f"📡 Status: {response.status_code}")
             
-            r = requests.get(url, headers=self.headers)
-            
-            print(f"📡 Status: {r.status_code}")
-            
-            # Print full error response
-            if r.status_code != 200:
-                print(f"❌ ERROR DETAILS:")
-                print(f"   Status Code: {r.status_code}")
-                try:
-                    error_json = r.json()
-                    print(f"   Error JSON: {json.dumps(error_json, indent=2)}")
-                except:
-                    print(f"   Raw Response: {r.text[:500]}")
-            
-            return r.status_code == 200
+            if response.status_code == 200:
+                print(f"✅ Repository verified: {repo_name}")
+                return True
+            else:
+                print(f"❌ Failed: {response.status_code}")
+                return False
         except Exception as e:
-            print(f"❌ Exception: {e}")
-            traceback.print_exc()
+            print(f"❌ Error: {e}")
             return False
     
     def get_pull_requests(self, repo_name, state='open'):
         if not self.is_configured:
             return []
         try:
-            r = requests.get(
-                f'https://api.github.com/repos/{repo_name}/pulls?state={state}&per_page=100',
-                headers=self.headers
-            )
-            if r.status_code == 200:
-                return r.json()
-            print(f"❌ Error fetching PRs: {r.status_code}")
+            url = f'https://api.github.com/repos/{repo_name}/pulls?state={state}&per_page=100'
+            headers = {
+                'Authorization': f'token {self.token}',
+                'Accept': 'application/vnd.github.v3+json'
+            }
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                return response.json()
             return []
         except Exception as e:
-            print(f"❌ Exception fetching PRs: {e}")
+            print(f"❌ Error: {e}")
             return []
     
     def get_pr_files(self, repo_name, pr_number):
         if not self.is_configured:
             return []
         try:
-            r = requests.get(
-                f'https://api.github.com/repos/{repo_name}/pulls/{pr_number}/files',
-                headers=self.headers
-            )
-            if r.status_code == 200:
-                return r.json()
+            url = f'https://api.github.com/repos/{repo_name}/pulls/{pr_number}/files'
+            headers = {
+                'Authorization': f'token {self.token}',
+                'Accept': 'application/vnd.github.v3+json'
+            }
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                return response.json()
             return []
-        except:
+        except Exception as e:
+            print(f"❌ Error: {e}")
             return []
     
     def trigger_github_action(self, repo_name, workflow_id='sync.yml', ref='main'):
         if not self.is_configured:
             return False
-        url = f'https://api.github.com/repos/{repo_name}/actions/workflows/{workflow_id}/dispatches'
-        payload = {'ref': ref}
         try:
-            r = requests.post(url, headers=self.headers, json=payload)
-            return r.status_code == 204
-        except:
+            url = f'https://api.github.com/repos/{repo_name}/actions/workflows/{workflow_id}/dispatches'
+            headers = {
+                'Authorization': f'token {self.token}',
+                'Accept': 'application/vnd.github.v3+json'
+            }
+            payload = {'ref': ref}
+            response = requests.post(url, headers=headers, json=payload)
+            print(f"🚀 Trigger workflow: {response.status_code}")
+            return response.status_code == 204
+        except Exception as e:
+            print(f"❌ Error: {e}")
             return False
     
     def get_workflow_runs(self, repo_name, limit=1):
         if not self.is_configured:
             return []
-        url = f'https://api.github.com/repos/{repo_name}/actions/runs'
         try:
-            r = requests.get(url, headers=self.headers, params={'per_page': limit})
-            if r.status_code == 200:
-                return r.json().get('workflow_runs', [])
+            url = f'https://api.github.com/repos/{repo_name}/actions/runs?per_page={limit}'
+            headers = {
+                'Authorization': f'token {self.token}',
+                'Accept': 'application/vnd.github.v3+json'
+            }
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                return response.json().get('workflow_runs', [])
             return []
-        except:
+        except Exception as e:
+            print(f"❌ Error: {e}")
             return []
     
     def get_workflow_run_status(self, repo_name, run_id):
         if not self.is_configured:
             return None
-        url = f'https://api.github.com/repos/{repo_name}/actions/runs/{run_id}'
         try:
-            r = requests.get(url, headers=self.headers)
-            if r.status_code == 200:
-                data = r.json()
+            url = f'https://api.github.com/repos/{repo_name}/actions/runs/{run_id}'
+            headers = {
+                'Authorization': f'token {self.token}',
+                'Accept': 'application/vnd.github.v3+json'
+            }
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                data = response.json()
                 return {
                     'status': data.get('status'),
                     'conclusion': data.get('conclusion'),
                     'html_url': data.get('html_url')
                 }
             return None
-        except:
+        except Exception as e:
+            print(f"❌ Error: {e}")
             return None
     
     def sync_prs_to_db(self, source_repo, project_id):
@@ -284,6 +283,7 @@ class GitHubClient:
         
         return synced_count
 
+# Initialize GitHub client
 github_client = GitHubClient(GITHUB_TOKEN) if GITHUB_TOKEN else None
 
 # ============================================================
@@ -654,8 +654,5 @@ if __name__ == '__main__':
     print(f"🔑 GitHub configured: {bool(GITHUB_TOKEN)}")
     if GITHUB_TOKEN:
         print(f"🔑 Token: {GITHUB_TOKEN[:10]}...{GITHUB_TOKEN[-4:]}")
-        print(f"🔑 Starts with ghp_: {GITHUB_TOKEN.startswith('ghp_')}")
-    else:
-        print("⚠️  WARNING: GITHUB_TOKEN is EMPTY!")
     print("=" * 60)
     app.run(host='0.0.0.0', port=port, debug=False)
