@@ -71,6 +71,7 @@ nav button{
     cursor:pointer;
     margin-bottom:3px;
     color:#555;
+    font-size:13px;
 }
 
 nav button:hover,
@@ -84,10 +85,6 @@ main{
     flex:1;
     padding:25px;
     max-width:1650px;
-}
-
-.page{
-    display:block;
 }
 
 h1{
@@ -164,6 +161,7 @@ h3{
     border-radius:7px;
     cursor:pointer;
     font-weight:600;
+    font-size:13px;
 }
 
 .btn:hover{
@@ -335,13 +333,15 @@ textarea{
     border-radius:7px;
     padding:9px;
     background:#fff;
+    font-size:13px;
 }
 
 textarea{
     min-height:80px;
 }
 
-.modal{
+/* FIXED MODAL */
+.modal-overlay{
     display:none;
     position:fixed;
     inset:0;
@@ -351,7 +351,7 @@ textarea{
     justify-content:center;
 }
 
-.modal.show{
+.modal-overlay.show{
     display:flex;
 }
 
@@ -625,13 +625,13 @@ textarea{
 
 </div>
 
-<!-- MODAL -->
-<div class="modal" id="modal">
+<!-- FIXED MODAL -->
+<div class="modal-overlay" id="modalOverlay">
     <div class="modal-box">
         <h2 id="modalTitle"></h2>
         <div id="modalBody"></div>
         <div class="modal-actions">
-            <button class="btn" onclick="closeModal()">Cancel</button>
+            <button class="btn" id="modalCancelBtn" onclick="closeModal()">Cancel</button>
         </div>
     </div>
 </div>
@@ -661,25 +661,29 @@ function showToast(message, type) {
 }
 
 // ============================================================
-// MODAL - Fixed Cancel Button
+// MODAL - FIXED
 // ============================================================
 
 function openModal(title, body) {
     document.getElementById('modalTitle').innerText = title;
     document.getElementById('modalBody').innerHTML = body;
-    document.getElementById('modal').classList.add('show');
+    document.getElementById('modalOverlay').classList.add('show');
 }
 
 function closeModal() {
-    document.getElementById('modal').classList.remove('show');
+    document.getElementById('modalOverlay').classList.remove('show');
 }
 
-// ============================================================
-// GLOBAL CLOSE MODAL ON ESCAPE KEY
-// ============================================================
-
+// Close modal on Escape key
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
+        closeModal();
+    }
+});
+
+// Close modal when clicking outside
+document.getElementById('modalOverlay').addEventListener('click', function(e) {
+    if (e.target === this) {
         closeModal();
     }
 });

@@ -48,10 +48,6 @@
 </div>
 
 <script>
-// ============================================================
-// CHANGE MODAL
-// ============================================================
-
 function openChangeModal() {
     const projects = {{ projects|tojson }};
     const options = projects.map(p => 
@@ -113,10 +109,6 @@ function createChange() {
     })
     .catch(err => showToast('❌ Error: ' + err.message, 'error'));
 }
-
-// ============================================================
-// APPROVAL ACTIONS
-// ============================================================
 
 function approveChange(changeId) {
     if (!confirm('Approve change ' + changeId + '?')) return;

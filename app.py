@@ -25,11 +25,19 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default-secret-key')
 
 # ============================================================
-# DATABASE
+# DATABASE - Fresh Start
 # ============================================================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'orchestrator.db')
+
+# Delete old database for fresh start
+if os.path.exists(DB_PATH):
+    try:
+        os.remove(DB_PATH)
+        print("🗑️ Old database deleted - Fresh start!")
+    except:
+        pass
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -121,30 +129,8 @@ def init_db():
                 )
             ''')
             
-            # Insert default data if empty
-            if conn.execute('SELECT COUNT(*) FROM cost_centers').fetchone()[0] == 0:
-                conn.execute('''
-                    INSERT INTO cost_centers (cc_id, name, perspective, owner) VALUES
-                    ('CC-2200', 'Finance', 'Finance', 'Finance Owner'),
-                    ('CC-1200', 'Sales', 'Sales', 'Sales Owner'),
-                    ('CC-3100', 'Operations', 'Operations', 'Operations Owner'),
-                    ('CC-4100', 'Customer Data', 'Customer / Data', 'Data Owner')
-                ''')
-                
-                conn.execute('''
-                    INSERT INTO projects (project_id, name, cost_center_id, repository_url, repository_name, provider, branch, aws_status, aws_connection) VALUES
-                    ('PRJ-001', 'Customer Analytics', 'CC-4100', 'https://github.com/example/customer-analytics', 'customer-analytics', 'GitHub', 'main', 'CONNECTED', 'customer-github-connection'),
-                    ('PRJ-021', 'Finance Reporting', 'CC-2200', 'https://bitbucket.org/example/finance-reporting', 'finance-reporting', 'Bitbucket', 'main', 'CONNECTED', 'finance-bitbucket-connection')
-                ''')
-                
-                conn.execute('''
-                    INSERT INTO changes (change_id, project_id, commit_sha, release_version, description, approval_status, deployment_status) VALUES
-                    ('CHG-2026-0042', 'PRJ-001', '8f3a91c2d7', 'v1.0.184', 'Analytics pipeline update', 'Approved', 'Ready'),
-                    ('CHG-2026-0047', 'PRJ-021', '72ac111', 'v1.8.52', 'Finance reporting fix', 'Pending', 'Blocked')
-                ''')
-            
             conn.commit()
-            print("✅ Database initialized")
+            print("✅ Database initialized - Fresh start!")
             return True
     except Exception as e:
         print(f"❌ DB init error: {e}")
