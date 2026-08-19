@@ -20,7 +20,7 @@
         <div class="metric-number orange">{{ pending_count }}</div>
     </div>
     <div class="card">
-        <div class="metric-label">Merged PRs</div>
+        <div class="metric-label">Merged</div>
         <div class="metric-number green">{{ merged_count }}</div>
     </div>
 </div>
@@ -38,7 +38,7 @@
         <div class="flow-arrow">→</div>
         <div class="flow-node"><strong>PR</strong>Pull Request</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Approval</strong>Governance Gate</div>
+        <div class="flow-node primary"><strong>Approval</strong>Gate</div>
         <div class="flow-arrow">→</div>
         <div class="flow-node"><strong>Merge</strong>To PROD</div>
         <div class="flow-arrow">→</div>
@@ -50,34 +50,17 @@
 
 <div class="grid grid-2">
     <div class="card">
-        <h2>Cost Center Portfolio</h2>
-        <table>
-            <thead><tr><th>Cost Center</th><th>Perspective</th><th>Projects</th><th>Running</th></tr></thead>
-            <tbody>
-                {% for cc in cost_centers %}
-                <tr>
-                    <td><strong>{{ cc.cc_id }}</strong><br>{{ cc.name }}</td>
-                    <td>{{ cc.perspective }}</td>
-                    <td>{{ cc.project_count or 0 }}</td>
-                    <td>{{ cc.running_count or 0 }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-
-    <div class="card">
-        <h2>System Status</h2>
+        <h2>GitHub Status</h2>
         <div style="display:flex;flex-direction:column;gap:8px;">
             <div>
                 <span class="badge {% if github_dev %}badge-ok{% else %}badge-grey{% endif %}">
-                    {% if github_dev %}✅{% else %}❌{% endif %} GitHub DEV
+                    {% if github_dev %}✅{% else %}❌{% endif %} DEV Repo
                 </span>
                 <span style="font-size:12px;color:#666;margin-left:8px;">{{ github_dev or 'Not Configured' }}</span>
             </div>
             <div>
                 <span class="badge {% if github_prod %}badge-ok{% else %}badge-grey{% endif %}">
-                    {% if github_prod %}✅{% else %}❌{% endif %} GitHub PROD
+                    {% if github_prod %}✅{% else %}❌{% endif %} PROD Repo
                 </span>
                 <span style="font-size:12px;color:#666;margin-left:8px;">{{ github_prod or 'Not Configured' }}</span>
             </div>
@@ -85,6 +68,15 @@
                 <span class="badge badge-ok">✅ App Status</span>
                 <span style="font-size:12px;color:#666;margin-left:8px;">Running</span>
             </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Quick Actions</h2>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+            <button class="btn btn-red" onclick="window.location.href='/projects'">📁 Manage Projects</button>
+            <button class="btn btn-green" onclick="window.location.href='/changes'">📋 View PRs</button>
+            <button class="btn" onclick="window.location.href='/approvals'">✅ Approvals</button>
         </div>
     </div>
 </div>

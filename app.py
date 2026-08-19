@@ -3,7 +3,6 @@ import os
 import json
 import requests
 import base64
-from datetime import datetime
 import sqlite3
 import random
 import re
@@ -32,6 +31,7 @@ app.secret_key = os.environ.get('SECRET_KEY', 'default-secret-key')
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'orchestrator.db')
 
+# Delete old database for fresh start
 if os.path.exists(DB_PATH):
     try:
         os.remove(DB_PATH)
@@ -153,7 +153,7 @@ def init_db():
 init_db()
 
 # ============================================================
-# GITHUB CLIENT - COMPLETE
+# GITHUB CLIENT
 # ============================================================
 
 class GitHubClient:
@@ -165,32 +165,13 @@ class GitHubClient:
         }
     
     def verify_repo(self, repo_name):
-        """Check if repository exists and is accessible"""
         try:
             response = requests.get(f'https://api.github.com/repos/{repo_name}', headers=self.headers)
             return response.status_code == 200
         except:
             return False
     
-    def get_repo_info(self, repo_name):
-        """Get repository information"""
-        try:
-            response = requests.get(f'https://api.github.com/repos/{repo_name}', headers=self.headers)
-            if response.status_code == 200:
-                data = response.json()
-                return {
-                    'exists': True,
-                    'name': data.get('name'),
-                    'full_name': data.get('full_name'),
-                    'default_branch': data.get('default_branch'),
-                    'private': data.get('private', False)
-                }
-            return {'exists': False}
-        except:
-            return {'exists': False}
-    
     def get_branches(self, repo_name):
-        """Get all branches of a repository"""
         try:
             response = requests.get(f'https://api.github.com/repos/{repo_name}/branches', headers=self.headers)
             if response.status_code == 200:
@@ -200,7 +181,6 @@ class GitHubClient:
             return []
     
     def get_commits(self, repo_name, branch='main', limit=10):
-        """Get recent commits from a branch"""
         try:
             response = requests.get(
                 f'https://api.github.com/repos/{repo_name}/commits?sha={branch}&per_page={limit}',
@@ -218,7 +198,6 @@ class GitHubClient:
             return []
     
     def create_pull_request(self, repo_name, title, body, head_branch, base_branch='main'):
-        """Create a Pull Request"""
         url = f'https://api.github.com/repos/{repo_name}/pulls'
         payload = {
             'title': title,
@@ -240,27 +219,7 @@ class GitHubClient:
         except Exception as e:
             return {'success': False, 'error': str(e)}
     
-    def get_pull_request(self, repo_name, pr_number):
-        """Get PR details"""
-        url = f'https://api.github.com/repos/{repo_name}/pulls/{pr_number}'
-        try:
-            response = requests.get(url, headers=self.headers)
-            if response.status_code == 200:
-                data = response.json()
-                return {
-                    'number': data.get('number'),
-                    'state': data.get('state'),
-                    'title': data.get('title'),
-                    'body': data.get('body'),
-                    'url': data.get('html_url'),
-                    'mergeable': data.get('mergeable', False)
-                }
-            return None
-        except:
-            return None
-    
     def merge_pull_request(self, repo_name, pr_number):
-        """Merge a Pull Request"""
         url = f'https://api.github.com/repos/{repo_name}/pulls/{pr_number}/merge'
         payload = {
             'commit_title': f'Merge PR #{pr_number}',
@@ -274,8 +233,19 @@ class GitHubClient:
         except Exception as e:
             return {'success': False, 'error': str(e)}
     
+    def get_all_files(self, repo_name, branch='main'):
+        try:
+            response = requests.get(
+                f'https://api.github.com/repos/{repo_name}/git/trees/{branch}?recursive=1',
+                headers=self.headers
+            )
+            if response.status_code == 200:
+                return [f for f in response.json().get('tree', []) if f['type'] == 'blob']
+            return []
+        except:
+            return []
+    
     def get_file_content(self, repo_name, file_path, branch='main'):
-        """Get file content from a repository"""
         try:
             response = requests.get(
                 f'https://api.github.com/repos/{repo_name}/contents/{file_path}?ref={branch}',
@@ -289,21 +259,7 @@ class GitHubClient:
         except:
             return None
     
-    def get_all_files(self, repo_name, branch='main'):
-        """Get all files from a repository"""
-        try:
-            response = requests.get(
-                f'https://api.github.com/repos/{repo_name}/git/trees/{branch}?recursive=1',
-                headers=self.headers
-            )
-            if response.status_code == 200:
-                return [f for f in response.json().get('tree', []) if f['type'] == 'blob']
-            return []
-        except:
-            return []
-    
     def compare_repos(self, dev_repo, prod_repo, branch='main'):
-        """Compare DEV and PROD repositories"""
         dev_files = self.get_all_files(dev_repo, branch)
         prod_files = self.get_all_files(prod_repo, branch)
         
@@ -311,36 +267,27 @@ class GitHubClient:
         prod_paths = {f['path'] for f in prod_files}
         
         changes = []
-        
-        # New files
         for path in dev_paths - prod_paths:
             changes.append({'file': path, 'type': 'new'})
-        
-        # Modified files
         for path in dev_paths & prod_paths:
             dev_content = self.get_file_content(dev_repo, path, branch)
             prod_content = self.get_file_content(prod_repo, path, branch)
             if dev_content and prod_content and dev_content['content'] != prod_content['content']:
                 changes.append({'file': path, 'type': 'modified'})
-        
-        # Deleted files
         for path in prod_paths - dev_paths:
             changes.append({'file': path, 'type': 'deleted'})
-        
         return changes
     
     def sync_to_prod(self, dev_repo, prod_repo, file_path, branch='main'):
-        """Sync a file from DEV to PROD"""
         content = self.get_file_content(dev_repo, file_path, branch)
         if not content:
             return False
         
         url = f'https://api.github.com/repos/{prod_repo}/contents/{file_path}'
         try:
-            # Check if file exists in PROD
             response = requests.get(url, headers=self.headers)
             payload = {
-                'message': f'[BOT] Sync {file_path} from DEV',
+                'message': f'[BOT] Sync {file_path}',
                 'content': base64.b64encode(content['content'].encode()).decode(),
                 'branch': branch
             }
@@ -369,8 +316,6 @@ def index():
         cost_centers = conn.execute('SELECT * FROM cost_centers').fetchall()
         projects = conn.execute('SELECT * FROM projects').fetchall()
         recent = conn.execute('SELECT * FROM changes ORDER BY created_at DESC LIMIT 10').fetchall()
-        
-        # Get running count
         running = conn.execute("SELECT SUM(running) FROM projects").fetchone()[0] or 0
     
     return render_template('index.html',
@@ -481,7 +426,7 @@ def api_create_project():
                   data.get('provider', 'GitHub'), data.get('branch', 'main'),
                   data.get('aws_status', 'PENDING'), data.get('aws_connection', '')))
             conn.commit()
-            return jsonify({'success': True, 'message': 'Project created'})
+            return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -504,15 +449,12 @@ def api_verify_project(project_id):
             return jsonify({'success': False, 'error': 'Project not found'}), 404
         
         if not github_client:
-            return jsonify({'success': False, 'error': 'GitHub not configured. Set GITHUB_TOKEN environment variable.'}), 400
+            return jsonify({'success': False, 'error': 'GitHub not configured'}), 400
         
         repo_name = project['repository_url'].replace('https://github.com/', '').replace('.git', '')
-        
-        # Verify repo
         connected = github_client.verify_repo(repo_name)
         branches = github_client.get_branches(repo_name) if connected else []
         
-        # Update status
         conn.execute('UPDATE projects SET aws_status = ? WHERE project_id = ?', 
                     ('CONNECTED' if connected else 'NOT CONNECTED', project_id))
         conn.commit()
@@ -523,39 +465,6 @@ def api_verify_project(project_id):
             'branches': branches,
             'repo_name': repo_name
         })
-
-@app.route('/api/projects/<project_id>/branches', methods=['GET'])
-def api_get_branches(project_id):
-    with get_db() as conn:
-        project = conn.execute('SELECT * FROM projects WHERE project_id = ?', (project_id,)).fetchone()
-        if not project:
-            return jsonify({'success': False, 'error': 'Project not found'}), 404
-        
-        if not github_client:
-            return jsonify({'success': False, 'error': 'GitHub not configured'}), 400
-        
-        repo_name = project['repository_url'].replace('https://github.com/', '').replace('.git', '')
-        branches = github_client.get_branches(repo_name)
-        
-        return jsonify({'success': True, 'data': branches})
-
-@app.route('/api/projects/<project_id>/commits', methods=['GET'])
-def api_get_commits(project_id):
-    branch = request.args.get('branch', 'main')
-    limit = request.args.get('limit', 10, type=int)
-    
-    with get_db() as conn:
-        project = conn.execute('SELECT * FROM projects WHERE project_id = ?', (project_id,)).fetchone()
-        if not project:
-            return jsonify({'success': False, 'error': 'Project not found'}), 404
-        
-        if not github_client:
-            return jsonify({'success': False, 'error': 'GitHub not configured'}), 400
-        
-        repo_name = project['repository_url'].replace('https://github.com/', '').replace('.git', '')
-        commits = github_client.get_commits(repo_name, branch, limit)
-        
-        return jsonify({'success': True, 'data': commits})
 
 @app.route('/api/detect-changes', methods=['POST'])
 def api_detect_changes():
@@ -581,7 +490,6 @@ def api_detect_changes():
         dev_repo = project['repository_url'].replace('https://github.com/', '').replace('.git', '')
         prod_repo = GITHUB_PROD_REPO
         
-        # Get diff between DEV and PROD
         changes = github_client.compare_repos(dev_repo, prod_repo, branch)
         commits = github_client.get_commits(dev_repo, branch, 5)
         
@@ -620,10 +528,7 @@ def api_create_pr():
         if not github_client:
             return jsonify({'success': False, 'error': 'GitHub not configured'}), 400
         
-        # Create PR
         repo_name = project['repository_url'].replace('https://github.com/', '').replace('.git', '')
-        
-        # If PROD repo is different, use it
         if GITHUB_PROD_REPO:
             repo_name = GITHUB_PROD_REPO
         
@@ -642,7 +547,6 @@ def api_create_pr():
 {description}
 """
         
-        # Create PR
         pr_result = github_client.create_pull_request(
             repo_name=repo_name,
             title=pr_title,
@@ -654,7 +558,6 @@ def api_create_pr():
         if not pr_result.get('success'):
             return jsonify({'success': False, 'error': pr_result.get('error', 'Failed to create PR')}), 400
         
-        # Save to database
         change_id = f"CHG-2026-{random.randint(1000, 9999)}"
         
         with get_db() as conn:
@@ -667,7 +570,6 @@ def api_create_pr():
                   commit_sha, release_version, description, json.dumps(files_changed), branch))
             conn.commit()
             
-            # Audit trail
             conn.execute('''
                 INSERT INTO audit_trail (event, change_id, project_id, commit_sha, result, details)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -693,25 +595,6 @@ def api_get_changes():
         else:
             changes = conn.execute('SELECT * FROM changes ORDER BY created_at DESC').fetchall()
         return jsonify({'success': True, 'data': [dict(c) for c in changes]})
-
-@app.route('/api/changes', methods=['POST'])
-def api_create_change():
-    try:
-        data = request.json
-        change_id = f"CHG-2026-{random.randint(1000, 9999)}"
-        
-        with get_db() as conn:
-            conn.execute('''
-                INSERT INTO changes (change_id, project_id, commit_sha, release_version, description, files_changed, branch)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (change_id, data['project_id'], data.get('commit_sha'), data.get('release_version'), 
-                  data.get('description', ''), json.dumps(data.get('files_changed', [])), data.get('branch', 'main')))
-            conn.commit()
-            
-            change = conn.execute('SELECT * FROM changes WHERE change_id = ?', (change_id,)).fetchone()
-            return jsonify({'success': True, 'data': dict(change)})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/changes/<change_id>/approve', methods=['POST'])
 def api_approve_change(change_id):
@@ -750,7 +633,6 @@ def api_merge_change(change_id):
             if not github_client:
                 return jsonify({'success': False, 'error': 'GitHub not configured'}), 400
             
-            # Get project
             project = conn.execute('SELECT * FROM projects WHERE project_id = ?', (change['project_id'],)).fetchone()
             if not project:
                 return jsonify({'success': False, 'error': 'Project not found'}), 404
@@ -759,7 +641,6 @@ def api_merge_change(change_id):
             if GITHUB_PROD_REPO:
                 repo_name = GITHUB_PROD_REPO
             
-            # Merge PR
             pr_number = change['pr_number']
             if pr_number:
                 merge_result = github_client.merge_pull_request(repo_name, pr_number)

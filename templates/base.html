@@ -273,6 +273,11 @@ td{
     color:#b3131a;
 }
 
+.badge-merged{
+    background:#cce5ff;
+    color:#004085;
+}
+
 .flow{
     display:flex;
     align-items:center;
@@ -340,7 +345,7 @@ textarea{
     min-height:80px;
 }
 
-/* FIXED MODAL */
+/* MODAL */
 .modal-overlay{
     display:none;
     position:fixed;
@@ -371,6 +376,7 @@ textarea{
     margin-top:15px;
 }
 
+/* TOAST */
 .toast{
     position:fixed;
     right:20px;
@@ -558,10 +564,7 @@ textarea{
     word-break:break-all;
     font-size:11px;
 }
-.badge-merged{
-    background:#cce5ff;
-    color:#004085;
-}
+
 @media(max-width:950px){
     .grid-4{
         grid-template-columns:repeat(2,1fr);
@@ -628,13 +631,13 @@ textarea{
 
 </div>
 
-<!-- FIXED MODAL -->
+<!-- MODAL -->
 <div class="modal-overlay" id="modalOverlay">
     <div class="modal-box">
         <h2 id="modalTitle"></h2>
         <div id="modalBody"></div>
         <div class="modal-actions">
-            <button class="btn" id="modalCancelBtn" onclick="closeModal()">Cancel</button>
+            <button class="btn" onclick="closeModal()">Cancel</button>
         </div>
     </div>
 </div>
@@ -660,11 +663,11 @@ function showToast(message, type) {
     const toast = document.getElementById('toast');
     toast.innerText = message;
     toast.className = 'toast show ' + (type || '');
-    setTimeout(() => toast.className = 'toast', 3000);
+    setTimeout(() => toast.className = 'toast', 4000);
 }
 
 // ============================================================
-// MODAL - FIXED
+// MODAL
 // ============================================================
 
 function openModal(title, body) {
@@ -690,20 +693,6 @@ document.getElementById('modalOverlay').addEventListener('click', function(e) {
         closeModal();
     }
 });
-function badge(status) {
-    let cls = 'badge-grey';
-    if (status === 'Approved' || status === 'CONNECTED' || status === 'Completed' || 
-        status === 'Succeeded' || status === 'Ready' || status === 'Merged') {
-        cls = 'badge-ok';
-    } else if (status === 'Pending' || status === 'Blocked') {
-        cls = 'badge-pending';
-    } else if (status === 'Running' || status === 'Deploying') {
-        cls = 'badge-running';
-    } else if (status === 'Failed' || status === 'Rejected') {
-        cls = 'badge-fail';
-    }
-    return `<span class="badge ${cls}">${status}</span>`;
-}
 </script>
 
 </body>
