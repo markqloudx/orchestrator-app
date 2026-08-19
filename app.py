@@ -4,25 +4,26 @@ import json
 import requests
 import sqlite3
 import random
+import traceback
 from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default-secret-key')
 
 # ============================================================
-# ⚠️ GITHUB TOKEN - PUT YOUR ACTUAL TOKEN HERE
+# ⚠️ PUT YOUR ACTUAL GITHUB TOKEN HERE
 # ============================================================
 
 # 🔑 PASTE YOUR TOKEN BETWEEN THE QUOTES
 GITHUB_TOKEN = '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'  # ← REPLACE THIS
 
 # ============================================================
-# DEBUG - Check if token is loaded
+# DEBUG - Print token info
 # ============================================================
 
-print("=" * 60)
+print("=" * 70)
 print("🔑 GITHUB TOKEN DEBUG")
-print("=" * 60)
+print("=" * 70)
 print(f"Token exists: {bool(GITHUB_TOKEN)}")
 if GITHUB_TOKEN:
     print(f"Token length: {len(GITHUB_TOKEN)}")
@@ -30,7 +31,7 @@ if GITHUB_TOKEN:
     print(f"Token: {GITHUB_TOKEN[:8]}...{GITHUB_TOKEN[-4:]}")
 else:
     print("❌ TOKEN IS EMPTY!")
-print("=" * 60)
+print("=" * 70)
 
 # ============================================================
 # DATABASE
@@ -123,7 +124,7 @@ def init_db():
 init_db()
 
 # ============================================================
-# GITHUB CLIENT
+# GITHUB CLIENT WITH FULL ERROR LOGGING
 # ============================================================
 
 class GitHubClient:
@@ -138,16 +139,31 @@ class GitHubClient:
     
     def verify_repo(self, repo_name):
         if not self.is_configured:
-            print(f"❌ Not configured - skipping verify for {repo_name}")
+            print(f"❌ GitHub not configured - cannot verify {repo_name}")
             return False
         try:
             url = f'https://api.github.com/repos/{repo_name}'
             print(f"🔍 Verifying: {url}")
+            print(f"🔑 Token used: {self.token[:10]}...{self.token[-4:] if self.token else 'EMPTY'}")
+            
             r = requests.get(url, headers=self.headers)
+            
             print(f"📡 Status: {r.status_code}")
+            
+            # Print full error response
+            if r.status_code != 200:
+                print(f"❌ ERROR DETAILS:")
+                print(f"   Status Code: {r.status_code}")
+                try:
+                    error_json = r.json()
+                    print(f"   Error JSON: {json.dumps(error_json, indent=2)}")
+                except:
+                    print(f"   Raw Response: {r.text[:500]}")
+            
             return r.status_code == 200
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"❌ Exception: {e}")
+            traceback.print_exc()
             return False
     
     def get_pull_requests(self, repo_name, state='open'):
@@ -160,8 +176,10 @@ class GitHubClient:
             )
             if r.status_code == 200:
                 return r.json()
+            print(f"❌ Error fetching PRs: {r.status_code}")
             return []
-        except:
+        except Exception as e:
+            print(f"❌ Exception fetching PRs: {e}")
             return []
     
     def get_pr_files(self, repo_name, pr_number):
