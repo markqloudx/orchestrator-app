@@ -3,7 +3,7 @@
 {% block content %}
 
 <h1>Approval Workflow</h1>
-<p class="muted">Review and approve pending change requests before deployment.</p>
+<p class="muted">Review and approve pending Pull Requests before merge.</p>
 
 <div class="card">
     <h2>Pending Approvals ({{ changes|length }})</h2>
@@ -14,7 +14,7 @@
             <tr>
                 <th>Change ID</th>
                 <th>Project</th>
-                <th>Commit</th>
+                <th>PR #</th>
                 <th>Description</th>
                 <th>Created</th>
                 <th>Actions</th>
@@ -25,12 +25,19 @@
             <tr>
                 <td><strong>{{ c.change_id }}</strong></td>
                 <td>{{ c.project_id }}</td>
-                <td><code>{{ c.commit_sha[:8] if c.commit_sha else '-' }}</code></td>
+                <td>
+                    {% if c.pr_number %}
+                    <a href="{{ c.pr_url }}" target="_blank">#{{ c.pr_number }}</a>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
                 <td>{{ c.description or '-' }}</td>
                 <td>{{ c.created_at[:16] if c.created_at else '-' }}</td>
                 <td>
                     <button class="btn btn-small btn-green" onclick="approveChange('{{ c.change_id }}')">✅ Approve</button>
                     <button class="btn btn-small" onclick="rejectChange('{{ c.change_id }}')">❌ Reject</button>
+                    <button class="btn btn-small btn-red" onclick="mergeChange('{{ c.change_id }}')">🔀 Merge</button>
                 </td>
             </tr>
             {% endfor %}
@@ -40,49 +47,34 @@
     <div style="text-align:center;padding:40px;color:#888;">
         <div style="font-size:48px;margin-bottom:16px;">🎉</div>
         <div style="font-size:18px;font-weight:600;">No pending approvals</div>
-        <div style="font-size:14px;margin-top:8px;">All changes have been reviewed</div>
+        <div style="font-size:14px;margin-top:8px;">All PRs have been reviewed</div>
     </div>
     {% endif %}
 </div>
 
 <script>
 function approveChange(changeId) {
-    if (!confirm('Approve change ' + changeId + '?')) return;
-    
-    fetch('/api/changes/' + changeId + '/approve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approver: 'databricks-user' })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            showToast('✅ Change ' + changeId + ' approved!', 'success');
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            showToast('❌ ' + data.error, 'error');
-        }
-    });
+    if (!confirm('Approve PR for change ' + changeId + '?')) return;
+    fetch('/api/changes/' + changeId + '/approve', {method:'POST'})
+        .then(r=>r.json())
+        .then(d=>{if(d.success){alert('✅ Approved');location.reload();}else alert('❌ '+d.error);});
 }
 
 function rejectChange(changeId) {
-    const reason = prompt('Reason for rejection:');
-    if (reason === null) return;
-    
+    const reason = prompt('Reason:');
+    if(reason===null) return;
     fetch('/api/changes/' + changeId + '/reject', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approver: 'databricks-user', reason: reason || 'No reason' })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            showToast('❌ Change ' + changeId + ' rejected', 'error');
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            showToast('❌ ' + data.error, 'error');
-        }
-    });
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({reason:reason})
+    }).then(r=>r.json()).then(d=>{if(d.success){alert('❌ Rejected');location.reload();}else alert('❌ '+d.error);});
+}
+
+function mergeChange(changeId) {
+    if (!confirm('Merge PR for change ' + changeId + '?')) return;
+    fetch('/api/changes/' + changeId + '/merge', {method:'POST'})
+        .then(r=>r.json())
+        .then(d=>{if(d.success){alert('🔀 Merged!');location.reload();}else alert('❌ '+d.error);});
 }
 </script>
 

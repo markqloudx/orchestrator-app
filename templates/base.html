@@ -558,7 +558,10 @@ textarea{
     word-break:break-all;
     font-size:11px;
 }
-
+.badge-merged{
+    background:#cce5ff;
+    color:#004085;
+}
 @media(max-width:950px){
     .grid-4{
         grid-template-columns:repeat(2,1fr);
@@ -687,6 +690,20 @@ document.getElementById('modalOverlay').addEventListener('click', function(e) {
         closeModal();
     }
 });
+function badge(status) {
+    let cls = 'badge-grey';
+    if (status === 'Approved' || status === 'CONNECTED' || status === 'Completed' || 
+        status === 'Succeeded' || status === 'Ready' || status === 'Merged') {
+        cls = 'badge-ok';
+    } else if (status === 'Pending' || status === 'Blocked') {
+        cls = 'badge-pending';
+    } else if (status === 'Running' || status === 'Deploying') {
+        cls = 'badge-running';
+    } else if (status === 'Failed' || status === 'Rejected') {
+        cls = 'badge-fail';
+    }
+    return `<span class="badge ${cls}">${status}</span>`;
+}
 </script>
 
 </body>

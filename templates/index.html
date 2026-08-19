@@ -3,7 +3,7 @@
 {% block content %}
 
 <h1>Change Management Control Center</h1>
-<p class="muted">Cost Center → Project → Repository → Change → Approval → Pipeline → Databricks</p>
+<p class="muted">Cost Center → Project → Repository → PR → Approval → Merge → Deploy → Databricks</p>
 <div class="red-line"></div>
 
 <div class="grid grid-4">
@@ -16,12 +16,12 @@
         <div class="metric-number blue">{{ projects|length }}</div>
     </div>
     <div class="card">
-        <div class="metric-label">Running Deployments</div>
-        <div class="metric-number orange">{{ running_count }}</div>
+        <div class="metric-label">Pending PRs</div>
+        <div class="metric-number orange">{{ pending_count }}</div>
     </div>
     <div class="card">
-        <div class="metric-label">Approved Changes</div>
-        <div class="metric-number green">{{ approved_count }}</div>
+        <div class="metric-label">Merged PRs</div>
+        <div class="metric-number green">{{ merged_count }}</div>
     </div>
 </div>
 
@@ -36,13 +36,13 @@
         <div class="flow-arrow">→</div>
         <div class="flow-node primary"><strong>Repository</strong>Git Source</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node"><strong>Change</strong>Commit / Release</div>
+        <div class="flow-node"><strong>PR</strong>Pull Request</div>
         <div class="flow-arrow">→</div>
         <div class="flow-node primary"><strong>Approval</strong>Governance Gate</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node"><strong>CI/CD Pipeline</strong>Build / Deploy</div>
+        <div class="flow-node"><strong>Merge</strong>To PROD</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Databricks</strong>QA / PROD</div>
+        <div class="flow-node primary"><strong>Databricks</strong>Deploy</div>
     </div>
 </div>
 
@@ -67,17 +67,24 @@
     </div>
 
     <div class="card">
-        <h2>Current Deployment</h2>
-        <div id="dashboardDeployment">
-            {% if active_deployment %}
-            <div class="notice">
-                <strong>{{ active_deployment.change_id }}</strong><br>
-                Project: {{ active_deployment.project_id }}<br>
-                Status: <span class="badge badge-running">{{ active_deployment.deployment_status }}</span>
+        <h2>System Status</h2>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+            <div>
+                <span class="badge {% if github_dev %}badge-ok{% else %}badge-grey{% endif %}">
+                    {% if github_dev %}✅{% else %}❌{% endif %} GitHub DEV
+                </span>
+                <span style="font-size:12px;color:#666;margin-left:8px;">{{ github_dev or 'Not Configured' }}</span>
             </div>
-            {% else %}
-            <div class="notice">No active production deployment.</div>
-            {% endif %}
+            <div>
+                <span class="badge {% if github_prod %}badge-ok{% else %}badge-grey{% endif %}">
+                    {% if github_prod %}✅{% else %}❌{% endif %} GitHub PROD
+                </span>
+                <span style="font-size:12px;color:#666;margin-left:8px;">{{ github_prod or 'Not Configured' }}</span>
+            </div>
+            <div>
+                <span class="badge badge-ok">✅ App Status</span>
+                <span style="font-size:12px;color:#666;margin-left:8px;">Running</span>
+            </div>
         </div>
     </div>
 </div>
@@ -85,16 +92,31 @@
 <br>
 
 <div class="card">
-    <h2>Recent Changes</h2>
+    <h2>Recent Changes / PRs</h2>
     <table>
-        <thead><tr><th>Change ID</th><th>Project</th><th>Commit</th><th>Status</th><th>Created</th></tr></thead>
+        <thead>
+            <tr>
+                <th>Change ID</th>
+                <th>Project</th>
+                <th>PR #</th>
+                <th>Status</th>
+                <th>Created</th>
+            </tr>
+        </thead>
         <tbody>
             {% for c in recent_changes %}
             <tr>
                 <td><strong>{{ c.change_id }}</strong></td>
                 <td>{{ c.project_id }}</td>
-                <td><code>{{ c.commit_sha[:8] if c.commit_sha else '-' }}</code></td>
-                <td><span class="badge badge-{{ c.approval_status.lower() }}">{{ c.approval_status }}</span></td>
+                <td>{% if c.pr_number %}PR #{{ c.pr_number }}{% else %}-{% endif %}</td>
+                <td>
+                    <span class="badge badge-{{ c.approval_status.lower() }}">
+                        {{ c.approval_status }}
+                    </span>
+                    {% if c.deployment_status == 'Merged' %}
+                    <span class="badge badge-ok">✅ Merged</span>
+                    {% endif %}
+                </td>
                 <td>{{ c.created_at[:16] if c.created_at else '-' }}</td>
             </tr>
             {% endfor %}
@@ -110,7 +132,8 @@
         <strong>Cost Center is the parent.</strong>
         Every project must belong to a registered Cost Center.
         Every project must have a registered source repository.
-        Every production change must have an approval.
+        Every production change must go through a Pull Request.
+        Every PR must have an approval before merging.
         Every deployment must carry project, repository, commit, release and metadata information.
     </div>
 </div>
