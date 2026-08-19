@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Cost Center Registry</h1>
+<p class="muted">Cost Center is the parent entity for all projects.</p>
+<button class="btn btn-red" onclick="openCostCenterModal()">+ Add Cost Center</button>
+<br><br>
+<div class="card">
+    <table>
+        <thead><tr><th>Cost Center</th><th>Perspective</th><th>Owner</th><th>Projects</th><th>Running</th><th>Completed</th></tr></thead>
+        <tbody>
+            {% for cc in centers %}
+            <tr>
+                <td><strong>{{ cc.cc_id }}</strong><br>{{ cc.name }}</td>
+                <td>{{ cc.perspective }}</td>
+                <td>{{ cc.owner }}</td>
+                <td>{{ cc.project_count or 0 }}</td>
+                <td>{{ cc.running_count or 0 }}</td>
+                <td>{{ cc.completed_count or 0 }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

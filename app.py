@@ -6,9 +6,10 @@ import base64
 from datetime import datetime
 import sqlite3
 import re
+import random
 
 # ============================================================
-# CONFIGURATION - Reads from Environment Variables
+# CONFIGURATION - Environment Variables
 # ============================================================
 
 DATABRICKS_HOST = os.environ.get('DATABRICKS_HOST', '')
@@ -25,7 +26,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default-secret-key-change-me')
 
 # ============================================================
-# DATABASE - Uses current directory (NO /dbfs)
+# DATABASE
 # ============================================================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -85,9 +86,10 @@ def init_db():
                     commit_sha TEXT,
                     release_version TEXT,
                     description TEXT,
+                    files_changed TEXT,
+                    branch TEXT DEFAULT 'main',
                     approval_status TEXT DEFAULT 'PENDING',
                     deployment_status TEXT DEFAULT 'BLOCKED',
-                    files_changed TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     approved_at TIMESTAMP,
                     approved_by TEXT,
@@ -125,6 +127,28 @@ def init_db():
                 )
             ''')
             
+            # Insert default data if empty
+            if conn.execute('SELECT COUNT(*) FROM cost_centers').fetchone()[0] == 0:
+                conn.execute('''
+                    INSERT INTO cost_centers (cc_id, name, perspective, owner) VALUES
+                    ('CC-2200', 'Finance', 'Finance', 'Finance Owner'),
+                    ('CC-1200', 'Sales', 'Sales', 'Sales Owner'),
+                    ('CC-3100', 'Operations', 'Operations', 'Operations Owner'),
+                    ('CC-4100', 'Customer Data', 'Customer / Data', 'Data Owner')
+                ''')
+                
+                conn.execute('''
+                    INSERT INTO projects (project_id, name, cost_center_id, repository_url, repository_name, provider, branch, aws_status, aws_connection) VALUES
+                    ('PRJ-001', 'Customer Analytics', 'CC-4100', 'https://github.com/example/customer-analytics', 'customer-analytics', 'GitHub', 'main', 'CONNECTED', 'customer-github-connection'),
+                    ('PRJ-021', 'Finance Reporting', 'CC-2200', 'https://bitbucket.org/example/finance-reporting', 'finance-reporting', 'Bitbucket', 'main', 'CONNECTED', 'finance-bitbucket-connection')
+                ''')
+                
+                conn.execute('''
+                    INSERT INTO changes (change_id, project_id, commit_sha, release_version, description, approval_status, deployment_status) VALUES
+                    ('CHG-2026-0042', 'PRJ-001', '8f3a91c2d7', 'v1.0.184', 'Analytics pipeline update', 'Approved', 'Ready'),
+                    ('CHG-2026-0047', 'PRJ-021', '72ac111', 'v1.8.52', 'Finance reporting fix', 'Pending', 'Blocked')
+                ''')
+            
             conn.commit()
             print("✅ Database initialized successfully")
             return True
@@ -147,7 +171,6 @@ class GitHubClient:
         }
     
     def verify_repo(self, repo_name):
-        """Verify if repository exists and is accessible"""
         url = f'https://api.github.com/repos/{repo_name}'
         try:
             response = requests.get(url, headers=self.headers)
@@ -156,7 +179,6 @@ class GitHubClient:
             return False
     
     def get_repo_info(self, repo_name):
-        """Get repository information"""
         url = f'https://api.github.com/repos/{repo_name}'
         try:
             response = requests.get(url, headers=self.headers)
@@ -176,7 +198,6 @@ class GitHubClient:
             return {'exists': False}
     
     def get_branches(self, repo_name):
-        """Get all branches of a repository"""
         url = f'https://api.github.com/repos/{repo_name}/branches'
         try:
             response = requests.get(url, headers=self.headers)
@@ -187,12 +208,18 @@ class GitHubClient:
             return []
     
     def get_commits(self, repo_name, branch='main', limit=10):
-        """Get recent commits from a branch"""
         url = f'https://api.github.com/repos/{repo_name}/commits?sha={branch}&per_page={limit}'
         try:
             response = requests.get(url, headers=self.headers)
             if response.status_code == 200:
-                return response.json()
+                commits = response.json()
+                return [{
+                    'sha': c['sha'],
+                    'message': c['commit']['message'],
+                    'author': c['commit']['author']['name'],
+                    'date': c['commit']['author']['date'],
+                    'url': c['html_url']
+                } for c in commits]
             return []
         except:
             return []
@@ -205,8 +232,7 @@ class GitHubClient:
                 data = response.json()
                 return [f for f in data.get('tree', []) if f['type'] == 'blob']
             return []
-        except Exception as e:
-            print(f"Error getting files: {e}")
+        except:
             return []
     
     def get_file_content(self, repo_name, file_path, branch='main'):
@@ -218,8 +244,7 @@ class GitHubClient:
                 content = base64.b64decode(data['content']).decode('utf-8')
                 return {'content': content, 'sha': data['sha']}
             return None
-        except Exception as e:
-            print(f"Error getting file content: {e}")
+        except:
             return None
     
     def compare_repos(self, dev_repo, prod_repo, branch='main'):
@@ -273,123 +298,60 @@ class GitHubClient:
                 response = requests.put(url, headers=self.headers, json=payload)
             
             return response.status_code in [200, 201]
-        except Exception as e:
-            print(f"Error syncing file: {e}")
+        except:
             return False
 
-# ============================================================
-# DATABRICKS CLIENT
-# ============================================================
-
-class DatabricksClient:
-    def __init__(self, host, token):
-        self.host = host.rstrip('/')
-        self.token = token
-        self.headers = {
-            'Authorization': f'Bearer {token}',
-            'Content-Type': 'application/json'
-        }
-    
-    def list_jobs(self):
-        """List all jobs in Databricks workspace"""
-        url = f'{self.host}/api/2.0/jobs/list'
-        try:
-            response = requests.get(url, headers=self.headers)
-            return response.json()
-        except Exception as e:
-            return {'error': str(e)}
-    
-    def create_job(self, job_name, notebook_path, cluster_id):
-        url = f'{self.host}/api/2.0/jobs/create'
-        payload = {
-            'name': job_name,
-            'tasks': [{
-                'task_key': 'main_task',
-                'notebook_task': {'notebook_path': notebook_path},
-                'existing_cluster_id': cluster_id
-            }]
-        }
-        try:
-            response = requests.post(url, headers=self.headers, json=payload)
-            return response.json()
-        except Exception as e:
-            return {'error': str(e)}
-    
-    def run_job(self, job_id):
-        url = f'{self.host}/api/2.0/jobs/run-now'
-        payload = {'job_id': job_id}
-        try:
-            response = requests.post(url, headers=self.headers, json=payload)
-            return response.json()
-        except Exception as e:
-            return {'error': str(e)}
-    
-    def get_job_status(self, run_id):
-        url = f'{self.host}/api/2.0/jobs/runs/get'
-        params = {'run_id': run_id}
-        try:
-            response = requests.get(url, headers=self.headers, params=params)
-            return response.json()
-        except Exception as e:
-            return {'error': str(e)}
-    
-    def deploy_bundle(self, bundle_path, environment='dev'):
-        url = f'{self.host}/api/2.0/bundles/deploy'
-        payload = {
-            'bundle_path': bundle_path,
-            'target': environment
-        }
-        try:
-            response = requests.post(url, headers=self.headers, json=payload)
-            return response.json()
-        except Exception as e:
-            return {'error': str(e)}
-
 github_client = GitHubClient(GITHUB_TOKEN) if GITHUB_TOKEN else None
-databricks_client = DatabricksClient(DATABRICKS_HOST, DATABRICKS_TOKEN) if DATABRICKS_TOKEN else None
 
 # ============================================================
-# ROUTES
+# ROUTES - UI Pages
 # ============================================================
 
 @app.route('/')
 def index():
     with get_db() as conn:
-        pending = conn.execute("SELECT COUNT(*) FROM changes WHERE approval_status = 'PENDING'").fetchone()[0]
-        approved = conn.execute("SELECT COUNT(*) FROM changes WHERE approval_status = 'APPROVED'").fetchone()[0]
-        deployed = conn.execute("SELECT COUNT(*) FROM changes WHERE deployment_status = 'DEPLOYED'").fetchone()[0]
+        pending = conn.execute("SELECT COUNT(*) FROM changes WHERE approval_status = 'Pending'").fetchone()[0]
+        approved = conn.execute("SELECT COUNT(*) FROM changes WHERE approval_status = 'Approved'").fetchone()[0]
+        deployed = conn.execute("SELECT COUNT(*) FROM changes WHERE deployment_status = 'Deployed'").fetchone()[0]
         total = conn.execute("SELECT COUNT(*) FROM changes").fetchone()[0]
-        recent = conn.execute('SELECT * FROM changes ORDER BY created_at DESC LIMIT 10').fetchall()
         
-        # Get projects with repo status
-        projects = conn.execute('SELECT * FROM projects WHERE status = "ACTIVE"').fetchall()
+        cost_centers = conn.execute('SELECT * FROM cost_centers').fetchall()
+        projects = conn.execute('SELECT * FROM projects').fetchall()
+        recent_changes = conn.execute('SELECT * FROM changes ORDER BY created_at DESC LIMIT 10').fetchall()
+        
+        running = conn.execute("SELECT SUM(running) FROM projects").fetchone()[0] or 0
+        
+        # Get current deployment status
+        active_deployment = conn.execute('''
+            SELECT * FROM changes 
+            WHERE deployment_status = 'Deploying' OR deployment_status = 'Ready'
+            ORDER BY created_at DESC LIMIT 1
+        ''').fetchone()
     
     return render_template('index.html',
                          pending_count=pending,
                          approved_count=approved,
                          deployed_count=deployed,
                          total_count=total,
-                         recent_changes=recent,
+                         running_count=running,
+                         cost_centers=cost_centers,
                          projects=projects,
+                         recent_changes=recent_changes,
+                         active_deployment=active_deployment,
                          github_dev=GITHUB_DEV_REPO,
                          github_prod=GITHUB_PROD_REPO)
 
-@app.route('/changes')
-def changes():
-    with get_db() as conn:
-        all_changes = conn.execute('SELECT * FROM changes ORDER BY created_at DESC').fetchall()
-    return render_template('changes.html', changes=all_changes)
-
-@app.route('/approvals')
-def approvals():
-    with get_db() as conn:
-        pending = conn.execute('SELECT * FROM changes WHERE approval_status = "PENDING" ORDER BY created_at ASC').fetchall()
-    return render_template('approvals.html', changes=pending)
-
 @app.route('/cost-centers')
-def cost_centers():
+def cost_centers_page():
     with get_db() as conn:
-        centers = conn.execute('SELECT * FROM cost_centers').fetchall()
+        centers = conn.execute('''
+            SELECT c.*, 
+                   (SELECT COUNT(*) FROM projects WHERE cost_center_id = c.cc_id) as project_count,
+                   (SELECT SUM(running) FROM projects WHERE cost_center_id = c.cc_id) as running_count,
+                   (SELECT SUM(completed) FROM projects WHERE cost_center_id = c.cc_id) as completed_count
+            FROM cost_centers c
+            ORDER BY c.created_at DESC
+        ''').fetchall()
     return render_template('cost_centers.html', centers=centers)
 
 @app.route('/projects')
@@ -399,20 +361,71 @@ def projects_page():
             SELECT p.*, c.name as cost_center_name 
             FROM projects p 
             LEFT JOIN cost_centers c ON p.cost_center_id = c.cc_id
+            ORDER BY p.created_at DESC
         ''').fetchall()
-    return render_template('projects.html', projects=projects)
-
-@app.route('/cicd/<change_id>')
-def cicd_pipeline(change_id):
-    with get_db() as conn:
-        change = conn.execute('SELECT * FROM changes WHERE change_id = ?', (change_id,)).fetchone()
-        if not change:
-            return "Change not found", 404
         
-        # Get deployment logs for this change
-        logs = conn.execute('SELECT * FROM deployment_logs WHERE change_id = ? ORDER BY created_at ASC', (change_id,)).fetchall()
+        cost_centers = conn.execute('SELECT cc_id, name FROM cost_centers WHERE status = "ACTIVE"').fetchall()
     
-    return render_template('cicd.html', change=change, logs=logs)
+    return render_template('projects.html', projects=projects, cost_centers=cost_centers)
+
+@app.route('/changes')
+def changes_page():
+    with get_db() as conn:
+        changes = conn.execute('''
+            SELECT c.*, p.name as project_name, p.repository_name
+            FROM changes c
+            LEFT JOIN projects p ON c.project_id = p.project_id
+            ORDER BY c.created_at DESC
+        ''').fetchall()
+        
+        projects = conn.execute('SELECT project_id, name FROM projects WHERE status = "ACTIVE"').fetchall()
+    
+    return render_template('changes.html', changes=changes, projects=projects)
+
+@app.route('/approvals')
+def approvals_page():
+    with get_db() as conn:
+        pending = conn.execute('''
+            SELECT c.*, p.name as project_name, p.repository_name
+            FROM changes c
+            LEFT JOIN projects p ON c.project_id = p.project_id
+            WHERE c.approval_status = 'Pending'
+            ORDER BY c.created_at ASC
+        ''').fetchall()
+    return render_template('approvals.html', changes=pending)
+
+@app.route('/deployment')
+def deployment_page():
+    return render_template('deployment.html')
+
+@app.route('/audit')
+def audit_page():
+    with get_db() as conn:
+        audit = conn.execute('''
+            SELECT * FROM audit_trail 
+            ORDER BY time DESC 
+            LIMIT 100
+        ''').fetchall()
+    return render_template('audit.html', audit=audit)
+
+@app.route('/repository')
+def repository_page():
+    with get_db() as conn:
+        projects = conn.execute('''
+            SELECT p.*, c.name as cost_center_name 
+            FROM projects p 
+            LEFT JOIN cost_centers c ON p.cost_center_id = c.cc_id
+            WHERE p.status = 'ACTIVE'
+        ''').fetchall()
+    return render_template('repository.html', projects=projects)
+
+@app.route('/metadata')
+def metadata_page():
+    return render_template('metadata.html')
+
+@app.route('/swagger')
+def swagger_page():
+    return render_template('swagger.html')
 
 @app.route('/health')
 def health():
@@ -426,54 +439,17 @@ def health():
     })
 
 # ============================================================
-# SWAGGER / API DOCUMENTATION
-# ============================================================
-
-@app.route('/swagger')
-def swagger():
-    return render_template('swagger.html')
-
-@app.route('/api/docs')
-def api_docs():
-    return jsonify({
-        'title': 'Databricks Orchestrator API',
-        'version': '1.0.0',
-        'endpoints': {
-            'GET /api/cost-centers': 'Get all cost centers',
-            'POST /api/cost-centers': 'Create a new cost center',
-            'GET /api/projects': 'Get all projects',
-            'POST /api/projects': 'Create a new project',
-            'GET /api/projects/{id}': 'Get project details with repo status',
-            'GET /api/changes': 'Get all changes',
-            'POST /api/changes': 'Create a change request',
-            'POST /api/approve/{id}': 'Approve a change',
-            'POST /api/reject/{id}': 'Reject a change',
-            'POST /api/deploy/{id}': 'Deploy a change to PROD',
-            'POST /api/detect-changes': 'Detect changes between DEV and PROD',
-            'GET /api/github/verify/{repo}': 'Verify GitHub repository',
-            'GET /api/github/branches/{repo}': 'Get repository branches',
-            'GET /api/github/commits/{repo}/{branch}': 'Get commits from branch',
-            'POST /api/databricks/jobs/list': 'List Databricks jobs',
-            'POST /api/databricks/jobs/run': 'Run a Databricks job',
-            'GET /api/deployment-logs': 'Get deployment logs',
-            'GET /api/audit': 'Get audit trail'
-        }
-    })
-
-# ============================================================
 # API ROUTES
 # ============================================================
 
-# === COST CENTER APIs ===
-
 @app.route('/api/cost-centers', methods=['GET'])
-def get_cost_centers():
+def api_get_cost_centers():
     with get_db() as conn:
         centers = conn.execute('SELECT * FROM cost_centers').fetchall()
     return jsonify({'success': True, 'data': [dict(c) for c in centers]})
 
 @app.route('/api/cost-centers', methods=['POST'])
-def create_cost_center():
+def api_create_cost_center():
     try:
         data = request.json
         cc_id = data.get('cc_id')
@@ -492,15 +468,19 @@ def create_cost_center():
             conn.commit()
             
             center = conn.execute('SELECT * FROM cost_centers WHERE cc_id = ?', (cc_id,)).fetchone()
+            
+            conn.execute('''
+                INSERT INTO audit_trail (event, result, details)
+                VALUES (?, ?, ?)
+            ''', ('Cost Center Created', 'Success', f'Created {cc_id} - {name}'))
+            conn.commit()
         
         return jsonify({'success': True, 'data': dict(center)})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# === PROJECT APIs ===
-
 @app.route('/api/projects', methods=['GET'])
-def get_projects():
+def api_get_projects():
     with get_db() as conn:
         projects = conn.execute('''
             SELECT p.*, c.name as cost_center_name 
@@ -510,14 +490,14 @@ def get_projects():
     return jsonify({'success': True, 'data': [dict(p) for p in projects]})
 
 @app.route('/api/projects', methods=['POST'])
-def create_project():
+def api_create_project():
     try:
         data = request.json
         project_id = data.get('project_id')
         name = data.get('name')
         cost_center_id = data.get('cost_center_id')
-        repository_url = data.get('repository_url')
-        repository_name = data.get('repository_name')
+        repository_url = data.get('repository_url', '')
+        repository_name = data.get('repository_name', '')
         provider = data.get('provider', 'GitHub')
         branch = data.get('branch', 'main')
         aws_connection = data.get('aws_connection', '')
@@ -525,10 +505,8 @@ def create_project():
         if not project_id or not name or not cost_center_id:
             return jsonify({'success': False, 'error': 'Required fields missing'}), 400
         
-        # Verify GitHub repository if token is available
         aws_status = 'PENDING'
         if github_client and repository_url:
-            # Extract repo name from URL
             repo_name = repository_url.replace('https://github.com/', '').replace('.git', '')
             if github_client.verify_repo(repo_name):
                 aws_status = 'CONNECTED'
@@ -545,7 +523,6 @@ def create_project():
             
             project = conn.execute('SELECT * FROM projects WHERE project_id = ?', (project_id,)).fetchone()
             
-            # Add audit entry
             conn.execute('''
                 INSERT INTO audit_trail (event, project_id, repository, result)
                 VALUES (?, ?, ?, ?)
@@ -556,46 +533,48 @@ def create_project():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/projects/<project_id>', methods=['GET'])
-def get_project(project_id):
+@app.route('/api/projects/<project_id>/verify', methods=['GET'])
+def api_verify_project(project_id):
     with get_db() as conn:
         project = conn.execute('SELECT * FROM projects WHERE project_id = ?', (project_id,)).fetchone()
         if not project:
             return jsonify({'success': False, 'error': 'Project not found'}), 404
         
-        project_dict = dict(project)
+        if not github_client:
+            return jsonify({'success': False, 'error': 'GitHub client not configured'}), 400
         
-        # Verify GitHub status
-        if github_client and project_dict.get('repository_url'):
-            repo_name = project_dict['repository_url'].replace('https://github.com/', '').replace('.git', '')
-            repo_info = github_client.get_repo_info(repo_name)
-            project_dict['repo_status'] = repo_info
-            project_dict['branches'] = github_client.get_branches(repo_name)
-            
-            # Update aws_status based on repo verification
-            if repo_info.get('exists'):
-                project_dict['aws_status'] = 'CONNECTED'
-            else:
-                project_dict['aws_status'] = 'NOT CONNECTED'
+        repo_name = project['repository_url'].replace('https://github.com/', '').replace('.git', '')
+        is_connected = github_client.verify_repo(repo_name)
         
-        return jsonify({'success': True, 'data': project_dict})
+        conn.execute('''
+            UPDATE projects SET aws_status = ? WHERE project_id = ?
+        ''', ('CONNECTED' if is_connected else 'NOT CONNECTED', project_id))
+        conn.commit()
+        
+        return jsonify({
+            'success': True,
+            'connected': is_connected,
+            'repository': repo_name,
+            'branches': github_client.get_branches(repo_name)
+        })
 
 @app.route('/api/projects/<project_id>/branches', methods=['GET'])
-def get_project_branches(project_id):
+def api_get_project_branches(project_id):
     with get_db() as conn:
         project = conn.execute('SELECT * FROM projects WHERE project_id = ?', (project_id,)).fetchone()
         if not project:
             return jsonify({'success': False, 'error': 'Project not found'}), 404
         
-        if github_client and project['repository_url']:
-            repo_name = project['repository_url'].replace('https://github.com/', '').replace('.git', '')
-            branches = github_client.get_branches(repo_name)
-            return jsonify({'success': True, 'data': branches})
+        if not github_client or not project['repository_url']:
+            return jsonify({'success': True, 'data': ['main']})
         
-        return jsonify({'success': True, 'data': []})
+        repo_name = project['repository_url'].replace('https://github.com/', '').replace('.git', '')
+        branches = github_client.get_branches(repo_name)
+        
+        return jsonify({'success': True, 'data': branches or ['main']})
 
 @app.route('/api/projects/<project_id>/commits', methods=['GET'])
-def get_project_commits(project_id):
+def api_get_project_commits(project_id):
     branch = request.args.get('branch', 'main')
     limit = request.args.get('limit', 10, type=int)
     
@@ -604,27 +583,37 @@ def get_project_commits(project_id):
         if not project:
             return jsonify({'success': False, 'error': 'Project not found'}), 404
         
-        if github_client and project['repository_url']:
-            repo_name = project['repository_url'].replace('https://github.com/', '').replace('.git', '')
-            commits = github_client.get_commits(repo_name, branch, limit)
-            return jsonify({'success': True, 'data': commits})
+        if not github_client or not project['repository_url']:
+            return jsonify({'success': True, 'data': []})
         
-        return jsonify({'success': True, 'data': []})
-
-# === CHANGE APIs ===
+        repo_name = project['repository_url'].replace('https://github.com/', '').replace('.git', '')
+        commits = github_client.get_commits(repo_name, branch, limit)
+        
+        return jsonify({'success': True, 'data': commits})
 
 @app.route('/api/changes', methods=['GET'])
-def get_changes():
+def api_get_changes():
     status = request.args.get('status')
     with get_db() as conn:
         if status:
-            changes = conn.execute('SELECT * FROM changes WHERE approval_status = ? ORDER BY created_at DESC', (status,)).fetchall()
+            changes = conn.execute('''
+                SELECT c.*, p.name as project_name 
+                FROM changes c 
+                LEFT JOIN projects p ON c.project_id = p.project_id
+                WHERE c.approval_status = ? 
+                ORDER BY c.created_at DESC
+            ''', (status,)).fetchall()
         else:
-            changes = conn.execute('SELECT * FROM changes ORDER BY created_at DESC').fetchall()
+            changes = conn.execute('''
+                SELECT c.*, p.name as project_name 
+                FROM changes c 
+                LEFT JOIN projects p ON c.project_id = p.project_id
+                ORDER BY c.created_at DESC
+            ''').fetchall()
     return jsonify({'success': True, 'data': [dict(c) for c in changes]})
 
 @app.route('/api/changes', methods=['POST'])
-def create_change():
+def api_create_change():
     try:
         data = request.json
         project_id = data.get('project_id')
@@ -632,29 +621,27 @@ def create_change():
         release_version = data.get('release_version')
         description = data.get('description', '')
         files_changed = json.dumps(data.get('files_changed', []))
+        branch = data.get('branch', 'main')
         
         if not project_id or not commit_sha:
             return jsonify({'success': False, 'error': 'project_id and commit_sha required'}), 400
         
-        # Generate change ID
-        import random
         change_id = f"CHG-2026-{random.randint(1000, 9999)}"
         
         with get_db() as conn:
             conn.execute('''
                 INSERT INTO changes 
-                (change_id, project_id, commit_sha, release_version, description, files_changed)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (change_id, project_id, commit_sha, release_version, description, files_changed))
+                (change_id, project_id, commit_sha, release_version, description, files_changed, branch)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (change_id, project_id, commit_sha, release_version, description, files_changed, branch))
             conn.commit()
             
             change = conn.execute('SELECT * FROM changes WHERE change_id = ?', (change_id,)).fetchone()
             
-            # Add audit entry
             conn.execute('''
-                INSERT INTO audit_trail (event, change_id, project_id, commit_sha, result)
-                VALUES (?, ?, ?, ?, ?)
-            ''', ('Change Created', change_id, project_id, commit_sha, 'Pending'))
+                INSERT INTO audit_trail (event, change_id, project_id, commit_sha, result, details)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', ('Change Created', change_id, project_id, commit_sha, 'Pending', description))
             conn.commit()
         
         return jsonify({'success': True, 'data': dict(change)})
@@ -662,7 +649,7 @@ def create_change():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/detect-changes', methods=['POST'])
-def detect_changes():
+def api_detect_changes():
     try:
         data = request.json
         project_id = data.get('project_id')
@@ -679,29 +666,26 @@ def detect_changes():
         if not github_client:
             return jsonify({'success': False, 'error': 'GitHub client not configured'}), 400
         
-        # Get DEV repo from project
         dev_repo = project['repository_url'].replace('https://github.com/', '').replace('.git', '')
-        
-        # Use global PROD repo or derive from project
-        prod_repo = GITHUB_PROD_REPO
+        prod_repo = GITHUB_PROD_REPO or dev_repo
         
         changes = github_client.compare_repos(dev_repo, prod_repo, branch)
-        
-        # Get recent commits from DEV branch
-        commits = github_client.get_commits(dev_repo, branch, 5) if github_client else []
+        commits = github_client.get_commits(dev_repo, branch, 5)
         
         return jsonify({
             'success': True,
             'changes': changes,
             'count': len(changes),
             'commits': commits,
-            'branch': branch
+            'branch': branch,
+            'dev_repo': dev_repo,
+            'prod_repo': prod_repo
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/approve/<change_id>', methods=['POST'])
-def approve_change(change_id):
+@app.route('/api/changes/<change_id>/approve', methods=['POST'])
+def api_approve_change(change_id):
     try:
         data = request.json
         approver = data.get('approver', 'databricks-user')
@@ -709,10 +693,10 @@ def approve_change(change_id):
         with get_db() as conn:
             conn.execute('''
                 UPDATE changes 
-                SET approval_status = 'APPROVED', 
+                SET approval_status = 'Approved', 
                     approved_at = CURRENT_TIMESTAMP,
                     approved_by = ?
-                WHERE change_id = ? AND approval_status = 'PENDING'
+                WHERE change_id = ? AND approval_status = 'Pending'
             ''', (approver, change_id))
             
             if conn.total_changes == 0:
@@ -720,7 +704,7 @@ def approve_change(change_id):
             
             conn.execute('''
                 INSERT INTO deployment_logs (change_id, action, status, details, stage)
-                VALUES (?, 'approve', 'APPROVED', ?, 'Approval')
+                VALUES (?, 'approve', 'Approved', ?, 'Approval')
             ''', (change_id, f'Approved by {approver}'))
             
             conn.execute('''
@@ -735,8 +719,8 @@ def approve_change(change_id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/reject/<change_id>', methods=['POST'])
-def reject_change(change_id):
+@app.route('/api/changes/<change_id>/reject', methods=['POST'])
+def api_reject_change(change_id):
     try:
         data = request.json
         approver = data.get('approver', 'databricks-user')
@@ -745,10 +729,10 @@ def reject_change(change_id):
         with get_db() as conn:
             conn.execute('''
                 UPDATE changes 
-                SET approval_status = 'REJECTED', 
+                SET approval_status = 'Rejected', 
                     approved_at = CURRENT_TIMESTAMP,
                     approved_by = ?
-                WHERE change_id = ? AND approval_status = 'PENDING'
+                WHERE change_id = ? AND approval_status = 'Pending'
             ''', (approver, change_id))
             
             if conn.total_changes == 0:
@@ -756,7 +740,7 @@ def reject_change(change_id):
             
             conn.execute('''
                 INSERT INTO deployment_logs (change_id, action, status, details, stage)
-                VALUES (?, 'reject', 'REJECTED', ?, 'Approval')
+                VALUES (?, 'reject', 'Rejected', ?, 'Approval')
             ''', (change_id, f'Rejected by {approver}: {reason}'))
             
             conn.execute('''
@@ -771,8 +755,8 @@ def reject_change(change_id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/deploy/<change_id>', methods=['POST'])
-def deploy_change(change_id):
+@app.route('/api/changes/<change_id>/deploy', methods=['POST'])
+def api_deploy_change(change_id):
     try:
         data = request.json
         deployer = data.get('deployer', 'databricks-user')
@@ -782,34 +766,35 @@ def deploy_change(change_id):
             if not change:
                 return jsonify({'success': False, 'error': 'Change not found'}), 404
             
-            if change['approval_status'] != 'APPROVED':
+            if change['approval_status'] != 'Approved':
                 return jsonify({'success': False, 'error': 'Change must be approved first'}), 400
             
-            # Get project
             project = conn.execute('SELECT * FROM projects WHERE project_id = ?', (change['project_id'],)).fetchone()
             
-            # Sync files to PROD
             sync_results = []
             if github_client and project and GITHUB_PROD_REPO:
                 dev_repo = project['repository_url'].replace('https://github.com/', '').replace('.git', '')
+                branch = change['branch'] or 'main'
                 files_changed = json.loads(change['files_changed']) if change['files_changed'] else []
+                
+                conn.execute('''
+                    UPDATE changes SET deployment_status = 'Deploying' WHERE change_id = ?
+                ''', (change_id,))
                 
                 for file_info in files_changed:
                     file_path = file_info.get('file')
                     if file_path:
-                        success = github_client.sync_to_prod(dev_repo, GITHUB_PROD_REPO, file_path)
+                        success = github_client.sync_to_prod(dev_repo, GITHUB_PROD_REPO, file_path, branch)
                         sync_results.append({'file': file_path, 'success': success})
             
-            # Update change status
             conn.execute('''
                 UPDATE changes 
-                SET deployment_status = 'DEPLOYED', 
+                SET deployment_status = 'Deployed', 
                     deployed_at = CURRENT_TIMESTAMP,
                     deployed_by = ?
                 WHERE change_id = ?
             ''', (deployer, change_id))
             
-            # Update project completed count
             conn.execute('''
                 UPDATE projects 
                 SET completed = completed + 1
@@ -818,7 +803,7 @@ def deploy_change(change_id):
             
             conn.execute('''
                 INSERT INTO deployment_logs (change_id, action, status, details, stage)
-                VALUES (?, 'deploy', 'DEPLOYED', ?, 'Deployment')
+                VALUES (?, 'deploy', 'Deployed', ?, 'Deployment')
             ''', (change_id, f'Deployed by {deployer}. Synced {len(sync_results)} files.'))
             
             conn.execute('''
@@ -829,68 +814,12 @@ def deploy_change(change_id):
             
             change = conn.execute('SELECT * FROM changes WHERE change_id = ?', (change_id,)).fetchone()
         
-        return jsonify({
-            'success': True, 
-            'data': dict(change),
-            'sync_results': sync_results
-        })
+        return jsonify({'success': True, 'data': dict(change), 'sync_results': sync_results})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# === GITHUB APIs ===
-
-@app.route('/api/github/verify/<path:repo_name>', methods=['GET'])
-def verify_github_repo(repo_name):
-    if not github_client:
-        return jsonify({'success': False, 'error': 'GitHub client not configured'}), 400
-    
-    repo_info = github_client.get_repo_info(repo_name)
-    return jsonify({'success': True, 'data': repo_info})
-
-@app.route('/api/github/branches/<path:repo_name>', methods=['GET'])
-def get_github_branches(repo_name):
-    if not github_client:
-        return jsonify({'success': False, 'error': 'GitHub client not configured'}), 400
-    
-    branches = github_client.get_branches(repo_name)
-    return jsonify({'success': True, 'data': branches})
-
-@app.route('/api/github/commits/<path:repo_name>/<branch>', methods=['GET'])
-def get_github_commits(repo_name, branch):
-    if not github_client:
-        return jsonify({'success': False, 'error': 'GitHub client not configured'}), 400
-    
-    limit = request.args.get('limit', 10, type=int)
-    commits = github_client.get_commits(repo_name, branch, limit)
-    return jsonify({'success': True, 'data': commits})
-
-# === DATABRICKS APIs ===
-
-@app.route('/api/databricks/jobs/list', methods=['GET'])
-def list_databricks_jobs():
-    if not databricks_client:
-        return jsonify({'success': False, 'error': 'Databricks client not configured'}), 400
-    
-    result = databricks_client.list_jobs()
-    return jsonify({'success': True, 'data': result})
-
-@app.route('/api/databricks/jobs/run', methods=['POST'])
-def run_databricks_job():
-    if not databricks_client:
-        return jsonify({'success': False, 'error': 'Databricks client not configured'}), 400
-    
-    data = request.json
-    job_id = data.get('job_id')
-    if not job_id:
-        return jsonify({'success': False, 'error': 'job_id required'}), 400
-    
-    result = databricks_client.run_job(job_id)
-    return jsonify({'success': True, 'data': result})
-
-# === LOGS AND AUDIT ===
-
 @app.route('/api/deployment-logs', methods=['GET'])
-def get_deployment_logs():
+def api_get_deployment_logs():
     change_id = request.args.get('change_id')
     with get_db() as conn:
         if change_id:
@@ -900,11 +829,11 @@ def get_deployment_logs():
     return jsonify({'success': True, 'data': [dict(log) for log in logs]})
 
 @app.route('/api/audit', methods=['GET'])
-def get_audit_trail():
+def api_get_audit():
     limit = request.args.get('limit', 50, type=int)
     with get_db() as conn:
-        audits = conn.execute('SELECT * FROM audit_trail ORDER BY time DESC LIMIT ?', (limit,)).fetchall()
-    return jsonify({'success': True, 'data': [dict(a) for a in audits]})
+        audit = conn.execute('SELECT * FROM audit_trail ORDER BY time DESC LIMIT ?', (limit,)).fetchall()
+    return jsonify({'success': True, 'data': [dict(a) for a in audit]})
 
 # ============================================================
 # RUN APP
@@ -916,6 +845,4 @@ if __name__ == '__main__':
     print(f"📁 Database: {DB_PATH}")
     print(f"🔑 GitHub configured: {bool(GITHUB_TOKEN)}")
     print(f"🔑 Databricks configured: {bool(DATABRICKS_TOKEN)}")
-    print(f"📁 GitHub DEV Repo: {GITHUB_DEV_REPO}")
-    print(f"📁 GitHub PROD Repo: {GITHUB_PROD_REPO}")
     app.run(host='0.0.0.0', port=port, debug=False)

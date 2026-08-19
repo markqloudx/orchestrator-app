@@ -1,185 +1,178 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>API Documentation</title>
-    <style>
-        *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:Arial,sans-serif;background:#f0f2f5;padding:20px}
-        .container{max-width:1200px;margin:0 auto}
-        .header{background:#fff;padding:20px;border-radius:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap}
-        .logo{font-size:22px;font-weight:800}
-        .logo span{color:#d71920}
-        .nav a{text-decoration:none;color:#666;padding:8px 16px;border-radius:6px}
-        .nav a:hover{background:#f0f0f0}
-        .card{background:#fff;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
-        .endpoint{background:#f8f9fa;padding:12px;border-radius:6px;margin:8px 0;border-left:4px solid #16834b}
-        .endpoint.get{border-left-color:#16834b}
-        .endpoint.post{border-left-color:#f39c12}
-        .endpoint.put{border-left-color:#315da8}
-        .endpoint.delete{border-left-color:#d71920}
-        .method{display:inline-block;padding:2px 10px;border-radius:4px;font-weight:700;font-size:12px;color:#fff}
-        .method.get{background:#16834b}
-        .method.post{background:#f39c12}
-        .method.put{background:#315da8}
-        .method.delete{background:#d71920}
-        .path{font-weight:600;font-size:14px}
-        .desc{color:#666;font-size:13px;margin-top:4px}
-        code{background:#f0f0f0;padding:2px 8px;border-radius:4px;font-size:13px}
-        .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-        .btn{background:#d71920;color:#fff;border:none;padding:8px 20px;border-radius:6px;cursor:pointer}
-        .btn:hover{background:#b9141a}
-        @media(max-width:768px){.grid-2{grid-template-columns:1fr}}
-    </style>
-</head>
-<body>
-<div class="container">
-    <div class="header">
-        <div class="logo">CHANGE <span>CONTROL</span> · API</div>
-        <div class="nav">
-            <a href="/">Dashboard</a>
-            <a href="/swagger" style="background:#d71920;color:#fff;border-radius:6px">API Docs</a>
-        </div>
-    </div>
+{% extends "base.html" %}
 
-    <div class="card">
-        <h2>📚 Databricks Orchestrator API</h2>
-        <p style="color:#666;margin:8px 0">Version 1.0.0</p>
-        <p>Base URL: <code>/api/</code></p>
-    </div>
+{% block content %}
+<h1>📚 API Documentation</h1>
+<p class="muted">REST API endpoints for the Databricks Orchestrator.</p>
 
-    <h2 style="margin:20px 0 10px">🔗 Endpoints</h2>
-
-    <div class="grid-2">
-        <div>
-            <h3>Cost Centers</h3>
-            <div class="endpoint get">
-                <span class="method get">GET</span>
-                <span class="path">/cost-centers</span>
-                <div class="desc">Get all cost centers</div>
-            </div>
-            <div class="endpoint post">
-                <span class="method post">POST</span>
-                <span class="path">/cost-centers</span>
-                <div class="desc">Create cost center</div>
-            </div>
-
-            <h3 style="margin-top:16px">Projects</h3>
-            <div class="endpoint get">
-                <span class="method get">GET</span>
-                <span class="path">/projects</span>
-                <div class="desc">Get all projects</div>
-            </div>
-            <div class="endpoint post">
-                <span class="method post">POST</span>
-                <span class="path">/projects</span>
-                <div class="desc">Create project</div>
-            </div>
-            <div class="endpoint get">
-                <span class="method get">GET</span>
-                <span class="path">/projects/{id}</span>
-                <div class="desc">Get project with repo status</div>
-            </div>
-            <div class="endpoint get">
-                <span class="method get">GET</span>
-                <span class="path">/projects/{id}/branches</span>
-                <div class="desc">Get project branches</div>
-            </div>
-            <div class="endpoint get">
-                <span class="method get">GET</span>
-                <span class="path">/projects/{id}/commits</span>
-                <div class="desc">Get project commits</div>
-            </div>
-        </div>
-
-        <div>
-            <h3>Changes</h3>
-            <div class="endpoint get">
-                <span class="method get">GET</span>
-                <span class="path">/changes</span>
-                <div class="desc">Get all changes</div>
-            </div>
-            <div class="endpoint post">
-                <span class="method post">POST</span>
-                <span class="path">/changes</span>
-                <div class="desc">Create change request</div>
-            </div>
-            <div class="endpoint post">
-                <span class="method post">POST</span>
-                <span class="path">/detect-changes</span>
-                <div class="desc">Detect changes between repos</div>
-            </div>
-
-            <h3 style="margin-top:16px">Approval & Deployment</h3>
-            <div class="endpoint post">
-                <span class="method post">POST</span>
-                <span class="path">/approve/{id}</span>
-                <div class="desc">Approve a change</div>
-            </div>
-            <div class="endpoint post">
-                <span class="method post">POST</span>
-                <span class="path">/reject/{id}</span>
-                <div class="desc">Reject a change</div>
-            </div>
-            <div class="endpoint post">
-                <span class="method post">POST</span>
-                <span class="path">/deploy/{id}</span>
-                <div class="desc">Deploy to PROD</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="card">
-        <h3>📊 GitHub APIs</h3>
-        <div class="endpoint get">
-            <span class="method get">GET</span>
-            <span class="path">/github/verify/{repo}</span>
-            <div class="desc">Verify GitHub repository</div>
-        </div>
-        <div class="endpoint get">
-            <span class="method get">GET</span>
-            <span class="path">/github/branches/{repo}</span>
-            <div class="desc">Get repository branches</div>
-        </div>
-        <div class="endpoint get">
-            <span class="method get">GET</span>
-            <span class="path">/github/commits/{repo}/{branch}</span>
-            <div class="desc">Get commits from branch</div>
-        </div>
-    </div>
-
-    <div class="card">
-        <h3>📦 Databricks APIs</h3>
-        <div class="endpoint get">
-            <span class="method get">GET</span>
-            <span class="path">/databricks/jobs/list</span>
-            <div class="desc">List Databricks jobs</div>
-        </div>
-        <div class="endpoint post">
-            <span class="method post">POST</span>
-            <span class="path">/databricks/jobs/run</span>
-            <div class="desc">Run a Databricks job</div>
-        </div>
-    </div>
-
-    <div class="card">
-        <h3>📋 Logs & Audit</h3>
-        <div class="endpoint get">
-            <span class="method get">GET</span>
-            <span class="path">/deployment-logs</span>
-            <div class="desc">Get deployment logs</div>
-        </div>
-        <div class="endpoint get">
-            <span class="method get">GET</span>
-            <span class="path">/audit</span>
-            <div class="desc">Get audit trail</div>
-        </div>
-        <div class="endpoint get">
-            <span class="method get">GET</span>
-            <span class="path">/health</span>
-            <div class="desc">Health check</div>
-        </div>
-    </div>
+<div class="card">
+    <h2>Base URL</h2>
+    <p><code>/api/</code></p>
 </div>
-</body>
-</html>
+
+<div class="card">
+    <h2>Authentication</h2>
+    <p>All API endpoints use the Databricks App's environment variables for authentication.</p>
+</div>
+
+<div class="card">
+    <h2>Endpoints</h2>
+    <table>
+        <thead>
+            <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+            <!-- Cost Centers -->
+            <tr>
+                <td><span class="badge badge-ok">GET</span></td>
+                <td><code>/api/cost-centers</code></td>
+                <td>Get all cost centers</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-running">POST</span></td>
+                <td><code>/api/cost-centers</code></td>
+                <td>Create a new cost center</td>
+            </tr>
+            
+            <!-- Projects -->
+            <tr>
+                <td><span class="badge badge-ok">GET</span></td>
+                <td><code>/api/projects</code></td>
+                <td>Get all projects</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-running">POST</span></td>
+                <td><code>/api/projects</code></td>
+                <td>Create a new project</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-ok">GET</span></td>
+                <td><code>/api/projects/{id}/verify</code></td>
+                <td>Verify GitHub repository</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-ok">GET</span></td>
+                <td><code>/api/projects/{id}/branches</code></td>
+                <td>Get repository branches</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-ok">GET</span></td>
+                <td><code>/api/projects/{id}/commits</code></td>
+                <td>Get commits from branch</td>
+            </tr>
+            
+            <!-- Changes -->
+            <tr>
+                <td><span class="badge badge-ok">GET</span></td>
+                <td><code>/api/changes</code></td>
+                <td>Get all changes</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-running">POST</span></td>
+                <td><code>/api/changes</code></td>
+                <td>Create a change request</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-running">POST</span></td>
+                <td><code>/api/detect-changes</code></td>
+                <td>Detect changes between repos</td>
+            </tr>
+            
+            <!-- Approval -->
+            <tr>
+                <td><span class="badge badge-running">POST</span></td>
+                <td><code>/api/changes/{id}/approve</code></td>
+                <td>Approve a change</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-running">POST</span></td>
+                <td><code>/api/changes/{id}/reject</code></td>
+                <td>Reject a change</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-running">POST</span></td>
+                <td><code>/api/changes/{id}/deploy</code></td>
+                <td>Deploy a change to PROD</td>
+            </tr>
+            
+            <!-- Logs & Audit -->
+            <tr>
+                <td><span class="badge badge-ok">GET</span></td>
+                <td><code>/api/deployment-logs</code></td>
+                <td>Get deployment logs</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-ok">GET</span></td>
+                <td><code>/api/audit</code></td>
+                <td>Get audit trail</td>
+            </tr>
+            
+            <!-- System -->
+            <tr>
+                <td><span class="badge badge-ok">GET</span></td>
+                <td><code>/health</code></td>
+                <td>Health check</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-ok">GET</span></td>
+                <td><code>/swagger</code></td>
+                <td>API documentation</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Example: Detect Changes</h2>
+    <pre style="background:#f5f5f5;padding:15px;border-radius:8px;">
+curl -X POST /api/detect-changes \
+  -H "Content-Type: application/json" \
+  -d '{"project_id": "PRJ-001", "branch": "main"}'
+
+Response:
+{
+  "success": true,
+  "changes": [
+    {"file": "notebook.py", "type": "new"},
+    {"file": "databricks.yml", "type": "modified"}
+  ],
+  "count": 2
+}</pre>
+</div>
+
+<div class="card">
+    <h2>Example: Create Change Request</h2>
+    <pre style="background:#f5f5f5;padding:15px;border-radius:8px;">
+curl -X POST /api/changes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "PRJ-001",
+    "commit_sha": "8f3a91c2d7",
+    "release_version": "v1.0.184",
+    "description": "Analytics pipeline update"
+  }'
+
+Response:
+{
+  "success": true,
+  "data": {
+    "change_id": "CHG-2026-0042",
+    "approval_status": "Pending",
+    "deployment_status": "Blocked"
+  }
+}</pre>
+</div>
+
+<div class="card">
+    <h2>Example: Approve and Deploy</h2>
+    <pre style="background:#f5f5f5;padding:15px;border-radius:8px;">
+# Approve
+curl -X POST /api/changes/CHG-2026-0042/approve \
+  -H "Content-Type: application/json" \
+  -d '{"approver": "admin"}'
+
+# Deploy
+curl -X POST /api/changes/CHG-2026-0042/deploy \
+  -H "Content-Type: application/json" \
+  -d '{"deployer": "admin"}'</pre>
+</div>
+{% endblock %}

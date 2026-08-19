@@ -1,104 +1,606 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Change Management Control Center</title>
-    <style>
-        *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:Arial,sans-serif;background:#f0f2f5;padding:20px}
-        .container{max-width:1400px;margin:0 auto}
-        
-        .header{background:#fff;padding:20px 24px;border-radius:12px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
-        .logo{font-size:22px;font-weight:800}
-        .logo span{color:#d71920}
-        .nav{display:flex;gap:8px;flex-wrap:wrap}
-        .nav a{text-decoration:none;color:#666;padding:8px 16px;border-radius:6px;font-weight:600}
-        .nav a:hover{background:#f0f0f0}
-        .nav a.active{background:#d71920;color:#fff}
-        .badge-db{background:#d71920;color:#fff;padding:4px 12px;border-radius:20px;font-size:11px}
-        .badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600}
-        .badge-pending{background:#fff3cd;color:#856404}
-        .badge-approved{background:#d4edda;color:#155724}
-        .badge-deployed{background:#cce5ff;color:#004085}
-        .badge-connected{background:#d4edda;color:#155724}
-        .badge-disconnected{background:#f8d7da;color:#721c24}
-        
-        .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
-        .metric-card{background:#fff;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
-        .metric-label{font-size:11px;text-transform:uppercase;color:#888;font-weight:600}
-        .metric-value{font-size:32px;font-weight:800;margin-top:4px}
-        .metric-value.red{color:#d71920}
-        .metric-value.green{color:#16834b}
-        .metric-value.blue{color:#315da8}
-        .metric-value.orange{color:#e67e22}
-        
-        .card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1);margin-bottom:20px}
-        .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px}
-        .card-title{font-size:18px;font-weight:700}
-        
-        .btn{padding:8px 20px;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s}
-        .btn-primary{background:#d71920;color:#fff}
-        .btn-primary:hover{background:#b9141a}
-        .btn-success{background:#16834b;color:#fff}
-        .btn-success:hover{background:#0f6a3d}
-        .btn-outline{background:#fff;color:#333;border:1px solid #ddd}
-        .btn-outline:hover{background:#f5f5f5}
-        .btn-sm{padding:4px 12px;font-size:12px}
-        
-        table{width:100%;border-collapse:collapse;font-size:14px}
-        th{text-align:left;padding:10px;background:#f8f9fa;border-bottom:2px solid #ddd}
-        td{padding:10px;border-bottom:1px solid #eee}
-        
-        .action-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
-        .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-        
-        .status-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
-        .status-dot.green{background:#16834b}
-        .status-dot.yellow{background:#f39c12}
-        .status-dot.red{background:#d71920}
-        .status-dot.grey{background:#888}
-        
-        .flow{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:10px 0}
-        .flow-node{min-width:100px;padding:10px;text-align:center;border:1px solid #ddd;border-radius:8px;background:#fff;font-size:11px}
-        .flow-node strong{display:block;font-size:13px}
-        .flow-node.primary{border:2px solid #d71920;background:#fff5f5}
-        .flow-arrow{color:#999;font-size:18px}
-        
-        .toast{position:fixed;bottom:20px;right:20px;background:#333;color:#fff;padding:16px 24px;border-radius:8px;display:none;z-index:999}
-        .toast.show{display:block}
-        .toast.success{background:#16834b}
-        .toast.error{background:#d71920}
-        
-        @media(max-width:768px){.metrics{grid-template-columns:1fr 1fr}.grid-2{grid-template-columns:1fr}}
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Change Management Control Center</title>
+
+<style>
+*{box-sizing:border-box}
+
+body{
+    margin:0;
+    font-family:Arial,Helvetica,sans-serif;
+    background:#f6f6f6;
+    color:#171717;
+}
+
+header{
+    height:64px;
+    background:#fff;
+    border-bottom:1px solid #ddd;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 24px;
+    position:sticky;
+    top:0;
+    z-index:20;
+}
+
+.logo{
+    font-size:18px;
+    font-weight:800;
+}
+.logo span{color:#d71920;}
+
+.header-right{
+    font-size:12px;
+    color:#666;
+    display:flex;
+    align-items:center;
+    gap:12px;
+}
+
+.layout{
+    display:flex;
+    min-height:calc(100vh - 64px);
+}
+
+aside{
+    width:235px;
+    background:#fff;
+    border-right:1px solid #ddd;
+    padding:15px;
+    flex-shrink:0;
+}
+
+.nav-title{
+    color:#999;
+    font-size:10px;
+    text-transform:uppercase;
+    font-weight:bold;
+    margin:15px 8px 7px;
+}
+
+nav button{
+    width:100%;
+    background:#fff;
+    border:0;
+    padding:11px;
+    text-align:left;
+    border-radius:7px;
+    cursor:pointer;
+    margin-bottom:3px;
+    color:#555;
+    font-size:13px;
+}
+
+nav button:hover,
+nav button.active{
+    background:#fff0f1;
+    color:#d71920;
+    font-weight:bold;
+}
+
+main{
+    flex:1;
+    padding:25px;
+    max-width:1650px;
+    overflow-x:auto;
+}
+
+.page{
+    display:none;
+}
+.page.active{
+    display:block;
+}
+
+h1{
+    margin:0 0 5px;
+    font-size:26px;
+}
+h2{
+    margin:0 0 10px;
+    font-size:18px;
+}
+h3{margin:0;}
+
+.muted{
+    color:#777;
+    font-size:12px;
+}
+
+.red-line{
+    height:3px;
+    background:#d71920;
+    margin:12px 0 18px;
+    border-radius:2px;
+}
+
+.grid{
+    display:grid;
+    gap:15px;
+}
+.grid-4{
+    grid-template-columns:repeat(4,1fr);
+}
+.grid-3{
+    grid-template-columns:repeat(3,1fr);
+}
+.grid-2{
+    grid-template-columns:repeat(2,1fr);
+}
+
+.card{
+    background:#fff;
+    border:1px solid #ddd;
+    border-radius:10px;
+    padding:18px;
+    box-shadow:0 1px 4px rgba(0,0,0,0.04);
+}
+
+.metric-label{
+    color:#888;
+    font-size:10px;
+    text-transform:uppercase;
+    font-weight:bold;
+    letter-spacing:0.5px;
+}
+.metric-number{
+    font-size:29px;
+    font-weight:800;
+    margin-top:5px;
+}
+.metric-number.red{color:#d71920;}
+.metric-number.green{color:#16834b;}
+.metric-number.blue{color:#315da8;}
+.metric-number.orange{color:#e67e22;}
+
+.btn{
+    border:1px solid #ccc;
+    background:#fff;
+    padding:9px 13px;
+    border-radius:7px;
+    cursor:pointer;
+    font-weight:600;
+    font-size:13px;
+}
+.btn:hover{
+    background:#f5f5f5;
+}
+.btn-red{
+    background:#d71920;
+    border-color:#d71920;
+    color:#fff;
+}
+.btn-red:hover{
+    background:#b9141a;
+    color:#fff;
+}
+.btn-green{
+    background:#16834b;
+    border-color:#16834b;
+    color:#fff;
+}
+.btn-green:hover{
+    background:#0f6a3d;
+}
+.btn-sm{
+    padding:6px 9px;
+    font-size:11px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+th{
+    background:#fafafa;
+    color:#666;
+    font-size:11px;
+    text-align:left;
+    padding:11px;
+    border-bottom:1px solid #ddd;
+}
+td{
+    font-size:12px;
+    padding:11px;
+    border-bottom:1px solid #eee;
+    vertical-align:middle;
+}
+
+.badge{
+    display:inline-block;
+    padding:4px 8px;
+    border-radius:20px;
+    font-size:10px;
+    font-weight:bold;
+}
+.badge-ok{
+    background:#e6f6ec;
+    color:#167342;
+}
+.badge-running{
+    background:#e9f0ff;
+    color:#315da8;
+}
+.badge-pending{
+    background:#fff3d5;
+    color:#875d00;
+}
+.badge-fail{
+    background:#fdebed;
+    color:#b3131a;
+}
+.badge-grey{
+    background:#eee;
+    color:#666;
+}
+.badge-approved{
+    background:#d4edda;
+    color:#155724;
+}
+.badge-deployed{
+    background:#cce5ff;
+    color:#004085;
+}
+.badge-ready{
+    background:#cce5ff;
+    color:#004085;
+}
+.badge-blocked{
+    background:#fdebed;
+    color:#b3131a;
+}
+
+.flow{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    overflow-x:auto;
+    padding:18px 3px;
+}
+.flow-node{
+    min-width:125px;
+    padding:14px 9px;
+    text-align:center;
+    border:1px solid #ccc;
+    border-radius:8px;
+    background:#fff;
+    font-size:11px;
+}
+.flow-node strong{
+    display:block;
+    margin-bottom:5px;
+}
+.flow-node.primary{
+    border:2px solid #d71920;
+}
+.flow-arrow{
+    color:#aaa;
+    font-weight:bold;
+}
+
+.notice{
+    background:#fff5f5;
+    border-left:4px solid #d71920;
+    padding:13px;
+    border-radius:5px;
+    font-size:12px;
+}
+
+.form-group{
+    margin-bottom:12px;
+}
+.form-group label{
+    display:block;
+    font-size:11px;
+    font-weight:bold;
+    color:#555;
+    margin-bottom:5px;
+}
+input, select, textarea{
+    width:100%;
+    border:1px solid #ccc;
+    border-radius:7px;
+    padding:9px;
+    background:#fff;
+    font-size:13px;
+}
+textarea{
+    min-height:80px;
+}
+
+.modal{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.55);
+    z-index:100;
+    align-items:center;
+    justify-content:center;
+}
+.modal.show{
+    display:flex;
+}
+.modal-box{
+    background:#fff;
+    width:min(720px,94vw);
+    max-height:90vh;
+    overflow:auto;
+    border-radius:12px;
+    padding:23px;
+}
+.modal-actions{
+    display:flex;
+    gap:8px;
+    justify-content:flex-end;
+    margin-top:15px;
+}
+
+.toast{
+    position:fixed;
+    right:20px;
+    bottom:20px;
+    background:#fff;
+    border-left:4px solid #d71920;
+    padding:13px 18px;
+    box-shadow:0 5px 25px rgba(0,0,0,.2);
+    display:none;
+    z-index:200;
+    font-size:12px;
+}
+.toast.show{
+    display:block;
+}
+.toast.success{
+    border-left-color:#16834b;
+}
+.toast.error{
+    border-left-color:#d71920;
+}
+
+.deployment-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.deployment-flow{
+    display:flex;
+    align-items:flex-start;
+    overflow-x:auto;
+    padding:30px 5px;
+}
+.deploy-step{
+    min-width:125px;
+    text-align:center;
+}
+.deploy-circle{
+    width:44px;
+    height:44px;
+    border-radius:50%;
+    background:#eee;
+    border:3px solid #ddd;
+    margin:auto;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:bold;
+}
+.deploy-step.done .deploy-circle{
+    background:#16834b;
+    border-color:#16834b;
+    color:#fff;
+}
+.deploy-step.active .deploy-circle{
+    background:#d71920;
+    border-color:#d71920;
+    color:#fff;
+    box-shadow:0 0 0 8px #ffe5e6;
+    animation:pulse 1.2s infinite;
+}
+.deploy-title{
+    margin-top:9px;
+    font-size:11px;
+    font-weight:bold;
+}
+.deploy-detail{
+    margin-top:4px;
+    color:#888;
+    font-size:9px;
+}
+.deploy-connector{
+    min-width:35px;
+    height:4px;
+    background:#ddd;
+    margin-top:20px;
+    border-radius:5px;
+}
+.deploy-connector.done{
+    background:#16834b;
+}
+.deploy-connector.active{
+    background:#d71920;
+}
+
+@keyframes pulse{
+    50%{box-shadow:0 0 0 13px #ffe5e6;}
+}
+
+.current-state{
+    background:#fff7f7;
+    border-left:5px solid #d71920;
+    border-radius:8px;
+    padding:17px;
+    display:flex;
+    gap:15px;
+    align-items:center;
+}
+.current-icon{
+    width:50px;
+    height:50px;
+    border-radius:50%;
+    background:#d71920;
+    color:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:bold;
+    font-size:20px;
+}
+
+.progress{
+    height:10px;
+    background:#eee;
+    border-radius:20px;
+    overflow:hidden;
+}
+.progress-bar{
+    height:100%;
+    width:0%;
+    background:#d71920;
+    transition:.6s;
+}
+
+.log{
+    background:#111;
+    color:#eee;
+    padding:16px;
+    border-radius:8px;
+    min-height:180px;
+    font-family:Consolas,monospace;
+    font-size:12px;
+    line-height:1.8;
+}
+.log-success{
+    color:#54d88c;
+}
+.log-running{
+    color:#ff6868;
+}
+.log-info{
+    color:#ddd;
+}
+.log-time{
+    color:#777;
+    margin-right:8px;
+}
+
+.repo-box{
+    border:1px solid #ddd;
+    border-radius:8px;
+    padding:13px;
+    background:#fff;
+}
+.repo-provider{
+    font-weight:bold;
+    color:#d71920;
+    font-size:11px;
+}
+.repo-url{
+    color:#555;
+    word-break:break-all;
+    font-size:11px;
+}
+
+@media(max-width:950px){
+    .grid-4{
+        grid-template-columns:repeat(2,1fr);
+    }
+    .grid-3{
+        grid-template-columns:repeat(2,1fr);
+    }
+    aside{
+        width:190px;
+    }
+}
+
+@media(max-width:650px){
+    .layout{
+        display:block;
+    }
+    aside{
+        width:100%;
+        border-right:0;
+        border-bottom:1px solid #ddd;
+    }
+    .grid-4,
+    .grid-3,
+    .grid-2{
+        grid-template-columns:1fr;
+    }
+    main{
+        padding:15px;
+    }
+}
+</style>
 </head>
+
 <body>
-<div class="container">
-    <div class="header">
-        <div class="logo">CHANGE <span>CONTROL</span> · DATABRICKS</div>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <span class="badge-db">🚀 Databricks App</span>
-            <div class="nav">
-                <a href="/" class="active">Dashboard</a>
-                <a href="/cost-centers">Cost Centers</a>
-                <a href="/projects">Projects</a>
-                <a href="/changes">Changes</a>
-                <a href="/approvals">Approvals</a>
-                <a href="/swagger">API</a>
-            </div>
+
+<header>
+    <div class="logo">CHANGE <span>CONTROL</span> · DATABRICKS</div>
+    <div class="header-right">
+        <span id="clock"></span>
+        <span class="badge badge-ok">● Live</span>
+    </div>
+</header>
+
+<div class="layout">
+
+<aside>
+    <div class="nav-title">Governance</div>
+    <nav>
+        <button class="active" onclick="navigate('dashboard',this)">Executive Flow</button>
+        <button onclick="navigate('costCenters',this)">Cost Centers</button>
+        <button onclick="navigate('projects',this)">Projects</button>
+        <button onclick="navigate('changes',this)">Change Register</button>
+        <button onclick="navigate('deployment',this)">Live Deployment</button>
+        <button onclick="navigate('audit',this)">End-to-End Audit</button>
+    </nav>
+    <div class="nav-title">Technical Reference</div>
+    <nav>
+        <button onclick="navigate('repository',this)">Repository Control</button>
+        <button onclick="navigate('metadata',this)">Metadata / YAML</button>
+        <button onclick="navigate('swagger',this)">📚 API Docs</button>
+    </nav>
+</aside>
+
+
+<main>
+
+<!-- DASHBOARD -->
+<section id="dashboard" class="page active">
+    <h1>Change Management Control Center</h1>
+    <p class="muted">Cost Center → Project → Repository → Change → Approval → Pipeline → Databricks</p>
+    <div class="red-line"></div>
+
+    <div class="grid grid-4">
+        <div class="card">
+            <div class="metric-label">Cost Centers</div>
+            <div class="metric-number blue" id="metricCostCenters">{{ cost_centers|length }}</div>
+        </div>
+        <div class="card">
+            <div class="metric-label">Projects</div>
+            <div class="metric-number blue" id="metricProjects">{{ projects|length }}</div>
+        </div>
+        <div class="card">
+            <div class="metric-label">Running Deployments</div>
+            <div class="metric-number orange" id="metricRunning">{{ running_count }}</div>
+        </div>
+        <div class="card">
+            <div class="metric-label">Approved Changes</div>
+            <div class="metric-number green" id="metricApproved">{{ approved_count }}</div>
         </div>
     </div>
 
-    <div class="metrics">
-        <div class="metric-card"><div class="metric-label">Total Changes</div><div class="metric-value blue">{{ total_count }}</div></div>
-        <div class="metric-card"><div class="metric-label">Pending</div><div class="metric-value orange">{{ pending_count }}</div></div>
-        <div class="metric-card"><div class="metric-label">Approved</div><div class="metric-value green">{{ approved_count }}</div></div>
-        <div class="metric-card"><div class="metric-label">Deployed</div><div class="metric-value red">{{ deployed_count }}</div></div>
-    </div>
+    <br>
 
     <div class="card">
-        <div class="card-header"><div class="card-title">🔁 CI/CD Flow</div></div>
+        <h2>End-to-End Change Management</h2>
         <div class="flow">
             <div class="flow-node primary"><strong>Cost Center</strong>Business Parent</div>
             <div class="flow-arrow">→</div>
@@ -106,58 +608,421 @@
             <div class="flow-arrow">→</div>
             <div class="flow-node primary"><strong>Repository</strong>Git Source</div>
             <div class="flow-arrow">→</div>
-            <div class="flow-node"><strong>Change</strong>Commit</div>
+            <div class="flow-node"><strong>Change</strong>Commit / Release</div>
             <div class="flow-arrow">→</div>
-            <div class="flow-node primary"><strong>Approval</strong>Gate</div>
+            <div class="flow-node primary"><strong>Approval</strong>Governance Gate</div>
             <div class="flow-arrow">→</div>
-            <div class="flow-node"><strong>CI/CD</strong>Pipeline</div>
+            <div class="flow-node"><strong>CI/CD Pipeline</strong>Build / Deploy</div>
             <div class="flow-arrow">→</div>
-            <div class="flow-node primary"><strong>Databricks</strong>Deploy</div>
+            <div class="flow-node primary"><strong>Databricks</strong>QA / PROD</div>
         </div>
     </div>
 
-    <div class="action-bar">
-        <button class="btn btn-primary" onclick="detectChanges()">🔍 Detect Changes</button>
-        <button class="btn btn-success" onclick="window.location.href='/approvals'">✅ Approve Changes</button>
-        <button class="btn btn-outline" onclick="window.location.href='/swagger'">📚 API Docs</button>
+    <br>
+
+    <div class="grid grid-2">
+        <div class="card">
+            <h2>Cost Center Portfolio</h2>
+            <table>
+                <thead><tr><th>Cost Center</th><th>Perspective</th><th>Projects</th><th>Running</th></tr></thead>
+                <tbody id="dashboardCostTable">
+                    {% for cc in cost_centers %}
+                    <tr>
+                        <td><strong>{{ cc.cc_id }}</strong><br>{{ cc.name }}</td>
+                        <td>{{ cc.perspective }}</td>
+                        <td>{{ cc.project_count or 0 }}</td>
+                        <td>{{ cc.running_count or 0 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Current Deployment</h2>
+            <div id="dashboardDeployment">
+                {% if active_deployment %}
+                <div class="notice">
+                    <strong>{{ active_deployment.change_id }}</strong><br>
+                    Project: {{ active_deployment.project_id }}<br>
+                    Status: <span class="badge badge-running">{{ active_deployment.deployment_status }}</span>
+                </div>
+                {% else %}
+                <div class="notice">No active production deployment.</div>
+                {% endif %}
+            </div>
+        </div>
     </div>
 
+    <br>
+
     <div class="card">
-        <div class="card-header"><div class="card-title">📊 Recent Changes</div></div>
+        <h2>Recent Changes</h2>
         <table>
-            <thead><tr><th>ID</th><th>Project</th><th>Commit</th><th>Status</th><th>Created</th></tr></thead>
+            <thead><tr><th>Change ID</th><th>Project</th><th>Commit</th><th>Status</th><th>Created</th></tr></thead>
             <tbody>
-                {% for c in recent_changes %}
+                {% for change in recent_changes %}
                 <tr>
-                    <td><strong>#{{ c.change_id }}</strong></td>
-                    <td>{{ c.project_id }}</td>
-                    <td><code>{{ c.commit_sha[:8] if c.commit_sha else '-' }}</code></td>
-                    <td><span class="badge badge-{{ c.approval_status.lower() }}">{{ c.approval_status }}</span></td>
-                    <td>{{ c.created_at[:16] if c.created_at else '-' }}</td>
+                    <td><strong>{{ change.change_id }}</strong></td>
+                    <td>{{ change.project_id }}</td>
+                    <td><code>{{ change.commit_sha[:8] if change.commit_sha else '-' }}</code></td>
+                    <td><span class="badge badge-{{ change.approval_status.lower() }}">{{ change.approval_status }}</span></td>
+                    <td>{{ change.created_at[:16] if change.created_at else '-' }}</td>
                 </tr>
-                {% else %}
-                <tr><td colspan="5" style="text-align:center;color:#888;padding:20px">No changes yet</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 
-    <div class="grid-2">
+    <br>
+
+    <div class="card">
+        <h2>Governance Principle</h2>
+        <div class="notice">
+            <strong>Cost Center is the parent.</strong>
+            Every project must belong to a registered Cost Center.
+            Every project must have a registered source repository.
+            Every production change must have an approval.
+            Every deployment must carry project, repository, commit, release and metadata information.
+        </div>
+    </div>
+</section>
+
+<!-- COST CENTERS -->
+<section id="costCenters" class="page">
+    <h1>Cost Center Registry</h1>
+    <p class="muted">Cost Center is the parent entity for all projects.</p>
+    <button class="btn btn-red" onclick="openCostCenterModal()">+ Add Cost Center</button>
+    <br><br>
+    <div class="card">
+        <table>
+            <thead><tr><th>Cost Center</th><th>Perspective</th><th>Owner</th><th>Projects</th><th>Running</th><th>Completed</th></tr></thead>
+            <tbody id="costCenterTable">
+                {% for cc in centers %}
+                <tr>
+                    <td><strong>{{ cc.cc_id }}</strong><br>{{ cc.name }}</td>
+                    <td>{{ cc.perspective }}</td>
+                    <td>{{ cc.owner }}</td>
+                    <td>{{ cc.project_count or 0 }}</td>
+                    <td>{{ cc.running_count or 0 }}</td>
+                    <td>{{ cc.completed_count or 0 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- PROJECTS -->
+<section id="projects" class="page">
+    <h1>Project Registry</h1>
+    <p class="muted">Project is the child of Cost Center. Repository integration is captured during project registration.</p>
+    <button class="btn btn-red" onclick="openProjectModal()">+ Register Project</button>
+    <br><br>
+    <div class="card">
+        <table>
+            <thead><tr><th>Project</th><th>Cost Center</th><th>Repository</th><th>Status</th><th>Branch</th><th>Running</th><th>Completed</th></tr></thead>
+            <tbody id="projectTable">
+                {% for p in projects %}
+                <tr>
+                    <td><strong>{{ p.project_id }}</strong><br>{{ p.name }}</td>
+                    <td><strong>{{ p.cost_center_id }}</strong><br>{{ p.cost_center_name }}</td>
+                    <td>
+                        <strong>{{ p.provider }}</strong><br>
+                        {{ p.repository_name }}<br>
+                        <span class="muted">{{ p.repository_url }}</span>
+                    </td>
+                    <td><span class="badge badge-{{ p.aws_status.lower() if p.aws_status else 'grey' }}">{{ p.aws_status or 'PENDING' }}</span></td>
+                    <td>{{ p.branch }}</td>
+                    <td>{{ p.running }}</td>
+                    <td>{{ p.completed }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- CHANGE REGISTER -->
+<section id="changes" class="page">
+    <h1>Change Register</h1>
+    <p class="muted">Register a change against a project and route it through approval before deployment.</p>
+    <button class="btn btn-red" onclick="openChangeModal()">+ Register Change</button>
+    <br><br>
+    <div class="card">
+        <table>
+            <thead><tr><th>Change</th><th>Project</th><th>Repository</th><th>Commit</th><th>Release</th><th>Approval</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="changeTable">
+                {% for c in changes %}
+                <tr>
+                    <td><strong>{{ c.change_id }}</strong></td>
+                    <td>{{ c.project_id }}<br>{{ c.project_name }}</td>
+                    <td>{{ c.repository_name }}</td>
+                    <td><code>{{ c.commit_sha[:8] if c.commit_sha else '-' }}</code></td>
+                    <td>{{ c.release_version or '-' }}</td>
+                    <td><span class="badge badge-{{ c.approval_status.lower() }}">{{ c.approval_status }}</span></td>
+                    <td><span class="badge badge-{{ c.deployment_status.lower() }}">{{ c.deployment_status }}</span></td>
+                    <td>
+                        {% if c.approval_status == 'Pending' %}
+                        <button class="btn btn-sm btn-green" onclick="approveChange('{{ c.change_id }}')">Approve</button>
+                        <button class="btn btn-sm" onclick="rejectChange('{{ c.change_id }}')">Reject</button>
+                        {% elif c.approval_status == 'Approved' and c.deployment_status == 'Ready' %}
+                        <button class="btn btn-sm btn-red" onclick="deployChange('{{ c.change_id }}')">Deploy</button>
+                        {% else %}
+                        <span class="badge badge-grey">{{ c.deployment_status }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- DEPLOYMENT -->
+<section id="deployment" class="page">
+    <h1>Live Deployment Control</h1>
+    <p class="muted">Visual representation of the project-specific deployment lifecycle.</p>
+    <div class="card">
+        <div class="deployment-header">
+            <div>
+                <div class="muted">ACTIVE DEPLOYMENT</div>
+                <h2 id="deploymentTitle">No deployment running</h2>
+            </div>
+            <div id="deploymentStatus"><span class="badge badge-grey">IDLE</span></div>
+        </div>
+        <div class="red-line"></div>
+        <div class="deployment-flow">
+            <div class="deploy-step" id="step0"><div class="deploy-circle">✓</div><div class="deploy-title">Change Approved</div><div class="deploy-detail">Governance Gate</div></div>
+            <div class="deploy-connector" id="connector0"></div>
+            <div class="deploy-step" id="step1"><div class="deploy-circle">1</div><div class="deploy-title">Bundle Validation</div><div class="deploy-detail">databricks.yml</div></div>
+            <div class="deploy-connector" id="connector1"></div>
+            <div class="deploy-step" id="step2"><div class="deploy-circle">2</div><div class="deploy-title">Bundle Build</div><div class="deploy-detail">Artifact</div></div>
+            <div class="deploy-connector" id="connector2"></div>
+            <div class="deploy-step" id="step3"><div class="deploy-circle">3</div><div class="deploy-title">CI/CD Pipeline</div><div class="deploy-detail">Deploy</div></div>
+            <div class="deploy-connector" id="connector3"></div>
+            <div class="deploy-step" id="step4"><div class="deploy-circle">4</div><div class="deploy-title">Databricks Validation</div><div class="deploy-detail">Workspace</div></div>
+            <div class="deploy-connector" id="connector4"></div>
+            <div class="deploy-step" id="step5"><div class="deploy-circle">5</div><div class="deploy-title">Deploying</div><div class="deploy-detail">Production</div></div>
+            <div class="deploy-connector" id="connector5"></div>
+            <div class="deploy-step" id="step6"><div class="deploy-circle">✓</div><div class="deploy-title">Complete</div><div class="deploy-detail">Release Live</div></div>
+        </div>
+        <div class="current-state">
+            <div class="current-icon" id="currentIcon">●</div>
+            <div>
+                <div class="muted">CURRENT STATE</div>
+                <h2 id="currentStage">Waiting for deployment</h2>
+                <div id="currentDescription">Select an approved change from the Change Register.</div>
+            </div>
+        </div>
+        <br>
+        <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:bold">
+            <span>Deployment Progress</span>
+            <span id="progressText">0%</span>
+        </div>
+        <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+    </div>
+    <br>
+    <div class="grid grid-4">
+        <div class="card"><div class="metric-label">Change ID</div><div class="metric-number" id="deploymentChange">—</div></div>
+        <div class="card"><div class="metric-label">Commit</div><div class="metric-number" id="deploymentCommit">—</div></div>
+        <div class="card"><div class="metric-label">Bundle</div><div class="metric-number" id="deploymentBundle">—</div></div>
+        <div class="card"><div class="metric-label">Environment</div><div class="metric-number">PROD</div></div>
+    </div>
+    <br>
+    <div class="card">
+        <h2>Live Deployment Log</h2>
+        <div class="log" id="deploymentLog"><span style="color:#777">Waiting for deployment...</span></div>
+    </div>
+</section>
+
+<!-- AUDIT -->
+<section id="audit" class="page">
+    <h1>End-to-End Audit Trail</h1>
+    <p class="muted">Every action is recorded in the audit trail.</p>
+    <div class="card">
+        <table>
+            <thead><tr><th>Time</th><th>Event</th><th>Change</th><th>Project</th><th>Repository</th><th>Result</th></tr></thead>
+            <tbody id="auditTable">
+                {% for a in audit %}
+                <tr>
+                    <td>{{ a.time[:16] if a.time else '-' }}</td>
+                    <td>{{ a.event }}</td>
+                    <td>{{ a.change_id or '-' }}</td>
+                    <td>{{ a.project_id or '-' }}</td>
+                    <td>{{ a.repository or '-' }}</td>
+                    <td><span class="badge badge-{{ a.result.lower() }}">{{ a.result }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- REPOSITORY -->
+<section id="repository" class="page">
+    <h1>Repository Control</h1>
+    <p class="muted">Technical reference for the project source-control integration.</p>
+    <div class="card">
+        <h2>Supported Repository Model</h2>
+        <div class="flow">
+            <div class="flow-node primary"><strong>GitHub</strong>Source Repository</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node primary"><strong>Bitbucket</strong>Source Repository</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node"><strong>CI/CD</strong>Pipeline</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node primary"><strong>Databricks</strong>Deployment</div>
+        </div>
+    </div>
+    <br>
+    <div class="grid grid-2">
         <div class="card">
-            <div class="card-header"><div class="card-title">📡 System Status</div></div>
-            <div style="display:flex;flex-direction:column;gap:8px">
-                <div><span class="status-dot {% if github_dev %}green{% else %}grey{% endif %}"></span>GitHub DEV: <strong>{{ github_dev or 'Not Configured' }}</strong></div>
-                <div><span class="status-dot {% if github_prod %}green{% else %}grey{% endif %}"></span>GitHub PROD: <strong>{{ github_prod or 'Not Configured' }}</strong></div>
-                <div><span class="status-dot green"></span>App Status: <strong>Running</strong></div>
+            <h2>Project Repository Example</h2>
+            <div class="repo-box">
+                <div class="repo-provider">GITHUB</div>
+                <br>
+                <strong>Customer Analytics</strong>
+                <p class="repo-url">{{ github_dev or 'https://github.com/example/customer-analytics' }}</p>
+                <p class="muted">Branch: main</p>
+                <span class="badge badge-ok">● CONNECTED</span>
             </div>
         </div>
         <div class="card">
-            <div class="card-header"><div class="card-title">🚀 Quick Actions</div></div>
-            <div style="display:flex;flex-direction:column;gap:10px">
-                <button class="btn btn-primary" onclick="detectChanges()">🔍 Detect Changes</button>
-                <button class="btn btn-success" onclick="window.location.href='/approvals'">✅ Approve Changes</button>
-                <button class="btn btn-outline" onclick="window.location.href='/changes'">📋 View All Changes</button>
-            </div>
+            <h2>Integration Control</h2>
+            <table>
+                <tr><td>Repository Provider</td><td><strong>GitHub</strong></td></tr>
+                <tr><td>DEV Repo</td><td>{{ github_dev or 'Not Configured' }}</td></tr>
+                <tr><td>PROD Repo</td><td>{{ github_prod or 'Not Configured' }}</td></tr>
+                <tr><td>Status</td><td><span class="badge badge-ok">● CONNECTED</span></td></tr>
+            </table>
+        </div>
+    </div>
+    <br>
+    <div class="notice">
+        <strong>Important:</strong> This prototype demonstrates the governance and integration model.
+        Actual GitHub credentials and Databricks workspace authentication are configured in the environment variables.
+    </div>
+</section>
+
+<!-- METADATA -->
+<section id="metadata" class="page">
+    <h1>Metadata / Databricks Technical Reference</h1>
+    <p class="muted">Metadata-driven project structure used by the governance model.</p>
+    <div class="grid grid-2">
+        <div class="card">
+            <h2>Recommended Project Structure</h2>
+            <pre>
+project/
+├── databricks.yml
+├── metadata.json
+├── resources/
+│   ├── jobs.yml
+│   ├── pipelines.yml
+│   └── permissions.yml
+├── src/
+│   ├── notebooks/
+│   ├── jobs/
+│   └── pipelines/
+├── tests/
+│   ├── unit/
+│   └── integration/
+└── README.md</pre>
+        </div>
+        <div class="card">
+            <h2>metadata.json</h2>
+            <pre>{
+  "cost_center": "CC-4100",
+  "project_id": "PRJ-001",
+  "project_name": "Customer Analytics",
+  "repository": {
+    "provider": "GitHub",
+    "name": "customer-analytics",
+    "branch": "main",
+    "url": "https://github.com/example/customer-analytics"
+  },
+  "change": {
+    "change_id": "CHG-2026-0042",
+    "commit_sha": "8f3a91c2d7",
+    "release": "v1.0.184"
+  },
+  "approval": "Approved",
+  "deployment": {
+    "environment": "prod",
+    "status": "Ready"
+  }
+}</pre>
+        </div>
+    </div>
+    <br>
+    <div class="card">
+        <h2>databricks.yml</h2>
+        <pre>
+bundle:
+  name: customer-analytics
+
+include:
+  - resources/*.yml
+
+variables:
+  cost_center: "CC-4100"
+  project_id: "PRJ-001"
+  change_id: "CHG-2026-0042"
+  release_version: "v1.0.184"
+
+targets:
+  dev:
+    mode: development
+  prod:
+    mode: production
+
+resources:
+  jobs:
+    customer_analytics_job:
+      name: customer-analytics-${var.project_id}
+      tasks:
+        - task_key: customer_processing
+          notebook_task:
+            notebook_path: /Workspace/customer-analytics</pre>
+    </div>
+</section>
+
+<!-- SWAGGER -->
+<section id="swagger" class="page">
+    <h1>📚 API Documentation</h1>
+    <p class="muted">REST API endpoints for the orchestrator.</p>
+    <br>
+    <div class="card">
+        <h2>API Endpoints</h2>
+        <table>
+            <thead><tr><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
+            <tbody>
+                <tr><td><span class="badge badge-ok">GET</span></td><td><code>/api/cost-centers</code></td><td>Get all cost centers</td></tr>
+                <tr><td><span class="badge badge-ok">GET</span></td><td><code>/api/projects</code></td><td>Get all projects</td></tr>
+                <tr><td><span class="badge badge-ok">GET</span></td><td><code>/api/changes</code></td><td>Get all changes</td></tr>
+                <tr><td><span class="badge badge-running">POST</span></td><td><code>/api/changes</code></td><td>Create a change request</td></tr>
+                <tr><td><span class="badge badge-running">POST</span></td><td><code>/api/detect-changes</code></td><td>Detect changes between repos</td></tr>
+                <tr><td><span class="badge badge-running">POST</span></td><td><code>/api/changes/{id}/approve</code></td><td>Approve a change</td></tr>
+                <tr><td><span class="badge badge-running">POST</span></td><td><code>/api/changes/{id}/reject</code></td><td>Reject a change</td></tr>
+                <tr><td><span class="badge badge-running">POST</span></td><td><code>/api/changes/{id}/deploy</code></td><td>Deploy a change</td></tr>
+                <tr><td><span class="badge badge-ok">GET</span></td><td><code>/api/deployment-logs</code></td><td>Get deployment logs</td></tr>
+                <tr><td><span class="badge badge-ok">GET</span></td><td><code>/api/audit</code></td><td>Get audit trail</td></tr>
+                <tr><td><span class="badge badge-ok">GET</span></td><td><code>/health</code></td><td>Health check</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+</main>
+</div>
+
+<!-- MODAL -->
+<div class="modal" id="modal">
+    <div class="modal-box">
+        <h2 id="modalTitle"></h2>
+        <div id="modalBody"></div>
+        <div class="modal-actions">
+            <button class="btn" onclick="closeModal()">Cancel</button>
         </div>
     </div>
 </div>
@@ -165,54 +1030,313 @@
 <div class="toast" id="toast"></div>
 
 <script>
-function showToast(msg,type='info'){
-    const t=document.getElementById('toast');
-    t.textContent=msg;
-    t.className='toast show '+type;
-    setTimeout(()=>t.className='toast',4000);
+// ============================================================
+// NAVIGATION
+// ============================================================
+
+function navigate(page, button) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(page).classList.add('active');
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    if (button) button.classList.add('active');
 }
 
-function detectChanges(){
-    showToast('🔍 Detecting changes...','info');
-    const projectId = prompt('Enter Project ID (e.g., PRJ-001):', 'PRJ-001');
-    if(!projectId) return;
-    const branch = prompt('Enter branch name:', 'main');
-    if(branch===null) return;
+// ============================================================
+// CLOCK
+// ============================================================
+
+function updateClock() {
+    document.getElementById('clock').innerText = new Date().toLocaleString();
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ============================================================
+// TOAST
+// ============================================================
+
+function showToast(message, type) {
+    const toast = document.getElementById('toast');
+    toast.innerText = message;
+    toast.className = 'toast show ' + (type || '');
+    setTimeout(() => toast.className = 'toast', 3000);
+}
+
+// ============================================================
+// MODAL
+// ============================================================
+
+function openModal(title, body) {
+    document.getElementById('modalTitle').innerText = title;
+    document.getElementById('modalBody').innerHTML = body;
+    document.getElementById('modal').classList.add('show');
+}
+
+function closeModal() {
+    document.getElementById('modal').classList.remove('show');
+}
+
+// ============================================================
+// COST CENTER MODAL
+// ============================================================
+
+function openCostCenterModal() {
+    openModal('Add Cost Center', `
+        <div class="form-group">
+            <label>Cost Center ID</label>
+            <input id="newCCId" placeholder="CC-5100">
+        </div>
+        <div class="form-group">
+            <label>Cost Center Name</label>
+            <input id="newCCName" placeholder="Technology">
+        </div>
+        <div class="form-group">
+            <label>Business Perspective</label>
+            <select id="newCCType">
+                <option>Finance</option><option>Sales</option>
+                <option>Operations</option><option>Customer / Data</option>
+                <option>Technology</option><option>Other</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Owner</label>
+            <input id="newCCOwner" placeholder="Business Owner">
+        </div>
+        <button class="btn btn-red" onclick="createCostCenter()">Create Cost Center</button>
+    `);
+}
+
+function createCostCenter() {
+    const id = document.getElementById('newCCId').value.trim();
+    const name = document.getElementById('newCCName').value.trim();
+    const perspective = document.getElementById('newCCType').value;
+    const owner = document.getElementById('newCCOwner').value.trim();
     
-    fetch('/api/detect-changes', {
+    if (!id || !name) { showToast('Please fill all fields', 'error'); return; }
+    
+    fetch('/api/cost-centers', {
         method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({project_id: projectId, branch: branch})
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cc_id: id, name, perspective, owner })
     })
-    .then(r=>r.json())
-    .then(data=>{
-        if(data.success && data.changes.length>0){
-            const files = data.changes.map(c=>({file:c.file,type:c.type}));
-            const commit = data.commits && data.commits[0] ? data.commits[0].sha : 'abc123def';
-            
-            fetch('/api/changes', {
-                method: 'POST',
-                headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({
-                    project_id: projectId,
-                    commit_sha: commit,
-                    release_version: 'v1.0.'+Math.floor(Math.random()*1000+100),
-                    description: 'Sync '+data.changes.length+' files',
-                    files_changed: files
-                })
-            })
-            .then(r=>r.json())
-            .then(result=>{
-                if(result.success){
-                    showToast('✅ Change '+result.data.change_id+' created!','success');
-                    setTimeout(()=>location.reload(),2000);
-                } else showToast('❌ '+result.error,'error');
-            });
-        } else if(data.success && data.changes.length===0){
-            showToast('✅ No changes detected','success');
-        } else showToast('❌ '+data.error,'error');
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('✅ Cost Center created!', 'success');
+            closeModal();
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('❌ ' + data.error, 'error');
+        }
+    });
+}
+
+// ============================================================
+// PROJECT MODAL
+// ============================================================
+
+function openProjectModal() {
+    const costCenters = {{ cost_centers|tojson }};
+    const options = costCenters.map(c => 
+        `<option value="${c.cc_id}">${c.cc_id} — ${c.name}</option>`
+    ).join('');
+    
+    openModal('Register Project + Repository', `
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label>Project ID</label>
+                <input id="newProjectId" value="PRJ-${Math.floor(Math.random()*900+100)}">
+            </div>
+            <div class="form-group">
+                <label>Cost Center Parent</label>
+                <select id="newProjectCC">${options}</select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Project Name</label>
+            <input id="newProjectName" placeholder="Customer Analytics">
+        </div>
+        <div class="form-group">
+            <label>Repository Provider</label>
+            <select id="newProvider"><option>GitHub</option><option>Bitbucket</option></select>
+        </div>
+        <div class="form-group">
+            <label>Repository URL</label>
+            <input id="newRepoURL" placeholder="https://github.com/company/project">
+        </div>
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label>Repository Name</label>
+                <input id="newRepoName" placeholder="customer-analytics">
+            </div>
+            <div class="form-group">
+                <label>Branch</label>
+                <input id="newBranch" value="main">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>AWS Connection Name</label>
+            <input id="newAWSConnection" placeholder="project-github-connection">
+        </div>
+        <button class="btn btn-red" onclick="createProject()">Register Project</button>
+    `);
+}
+
+function createProject() {
+    const data = {
+        project_id: document.getElementById('newProjectId').value.trim(),
+        name: document.getElementById('newProjectName').value.trim(),
+        cost_center_id: document.getElementById('newProjectCC').value,
+        provider: document.getElementById('newProvider').value,
+        repository_url: document.getElementById('newRepoURL').value.trim(),
+        repository_name: document.getElementById('newRepoName').value.trim(),
+        branch: document.getElementById('newBranch').value.trim(),
+        aws_connection: document.getElementById('newAWSConnection').value.trim()
+    };
+    
+    if (!data.project_id || !data.name || !data.repository_url) {
+        showToast('Please fill required fields', 'error');
+        return;
+    }
+    
+    fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
     })
-    .catch(e=>showToast('❌ '+e.message,'error'));
+    .then(r => r.json())
+    .then(result => {
+        if (result.success) {
+            showToast('✅ Project registered!', 'success');
+            closeModal();
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('❌ ' + result.error, 'error');
+        }
+    });
+}
+
+// ============================================================
+// CHANGE MODAL
+// ============================================================
+
+function openChangeModal() {
+    const projects = {{ projects|tojson }};
+    const options = projects.map(p => 
+        `<option value="${p.project_id}">${p.project_id} — ${p.name}</option>`
+    ).join('');
+    
+    openModal('Register Change', `
+        <div class="form-group">
+            <label>Project</label>
+            <select id="changeProject">${options}</select>
+        </div>
+        <div class="form-group">
+            <label>Commit SHA</label>
+            <input id="changeCommit" value="8f3a91c2d7">
+        </div>
+        <div class="form-group">
+            <label>Release / Bundle Version</label>
+            <input id="changeRelease" value="v1.0.185">
+        </div>
+        <div class="form-group">
+            <label>Change Description</label>
+            <textarea id="changeDescription" placeholder="Describe the change..."></textarea>
+        </div>
+        <button class="btn btn-red" onclick="createChange()">Submit Change</button>
+    `);
+}
+
+function createChange() {
+    const data = {
+        project_id: document.getElementById('changeProject').value,
+        commit_sha: document.getElementById('changeCommit').value.trim(),
+        release_version: document.getElementById('changeRelease').value.trim(),
+        description: document.getElementById('changeDescription').value.trim() || 'Change request'
+    };
+    
+    if (!data.commit_sha) {
+        showToast('Commit SHA is required', 'error');
+        return;
+    }
+    
+    fetch('/api/changes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.success) {
+            showToast('✅ Change ' + result.data.change_id + ' submitted!', 'success');
+            closeModal();
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('❌ ' + result.error, 'error');
+        }
+    });
+}
+
+// ============================================================
+// APPROVAL ACTIONS
+// ============================================================
+
+function approveChange(changeId) {
+    if (!confirm('Approve change ' + changeId + '?')) return;
+    
+    fetch('/api/changes/' + changeId + '/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approver: 'databricks-user' })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('✅ Change ' + changeId + ' approved!', 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('❌ ' + data.error, 'error');
+        }
+    });
+}
+
+function rejectChange(changeId) {
+    const reason = prompt('Reason for rejection:');
+    if (reason === null) return;
+    
+    fetch('/api/changes/' + changeId + '/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approver: 'databricks-user', reason: reason || 'No reason' })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('❌ Change ' + changeId + ' rejected', 'error');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('❌ ' + data.error, 'error');
+        }
+    });
+}
+
+function deployChange(changeId) {
+    if (!confirm('Deploy change ' + changeId + ' to PROD?')) return;
+    
+    fetch('/api/changes/' + changeId + '/deploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deployer: 'databricks-user' })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('🚀 Change ' + changeId + ' deployed!', 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('❌ ' + data.error, 'error');
+        }
+    });
 }
 </script>
 </body>

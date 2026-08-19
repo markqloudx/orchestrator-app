@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>End-to-End Audit Trail</h1>
+<p class="muted">Every action is recorded in the audit trail for complete traceability.</p>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Event</th>
+                <th>Change</th>
+                <th>Project</th>
+                <th>Repository</th>
+                <th>Commit</th>
+                <th>Result</th>
+            </tr>
+        </thead>
+        <tbody id="auditTable">
+            {% for a in audit %}
+            <tr>
+                <td>{{ a.time[:16] if a.time else '-' }}</td>
+                <td><strong>{{ a.event }}</strong></td>
+                <td>{{ a.change_id or '-' }}</td>
+                <td>{{ a.project_id or '-' }}</td>
+                <td>{{ a.repository or '-' }}</td>
+                <td><code>{{ a.commit_sha[:8] if a.commit_sha else '-' }}</code></td>
+                <td><span class="badge badge-{{ a.result.lower() }}">{{ a.result }}</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

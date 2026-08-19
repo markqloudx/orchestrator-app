@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Metadata / Databricks Technical Reference</h1>
+<p class="muted">Metadata-driven project structure used by the governance model.</p>
+
+<div class="grid grid-2">
+    <div class="card">
+        <h2>Recommended Project Structure</h2>
+        <pre>
+project/
+├── databricks.yml
+├── metadata.json
+├── resources/
+│   ├── jobs.yml
+│   ├── pipelines.yml
+│   └── permissions.yml
+├── src/
+│   ├── notebooks/
+│   ├── jobs/
+│   └── pipelines/
+├── tests/
+│   ├── unit/
+│   └── integration/
+└── README.md</pre>
+    </div>
+
+    <div class="card">
+        <h2>metadata.json</h2>
+        <pre>{
+  "cost_center": "CC-4100",
+  "cost_center_name": "Customer Data",
+  "project_id": "PRJ-001",
+  "project_name": "Customer Analytics",
+  "repository": {
+    "provider": "GitHub",
+    "name": "customer-analytics",
+    "branch": "main",
+    "url": "https://github.com/example/customer-analytics"
+  },
+  "aws": {
+    "connection": "customer-github-connection",
+    "status": "CONNECTED"
+  },
+  "change": {
+    "change_id": "CHG-2026-0042",
+    "commit_sha": "8f3a91c2d7",
+    "release": "v1.0.184"
+  },
+  "approval": "Approved",
+  "deployment": {
+    "environment": "prod",
+    "status": "Ready"
+  }
+}</pre>
+    </div>
+</div>
+
+<br>
+
+<div class="card">
+    <h2>databricks.yml</h2>
+    <pre>
+bundle:
+  name: customer-analytics
+
+include:
+  - resources/*.yml
+
+variables:
+  cost_center:
+    default: "CC-4100"
+  project_id:
+    default: "PRJ-001"
+  change_id:
+    default: "CHG-2026-0042"
+  release_version:
+    default: "v1.0.184"
+
+targets:
+  dev:
+    mode: development
+  qa:
+    mode: production
+  prod:
+    mode: production
+
+resources:
+  jobs:
+    customer_analytics_job:
+      name: customer-analytics-${var.project_id}
+      tasks:
+        - task_key: customer_processing
+          notebook_task:
+            notebook_path: /Workspace/customer-analytics</pre>
+</div>
+
+<br>
+
+<div class="card">
+    <h2>Metadata Validation Concept</h2>
+    <div class="flow">
+        <div class="flow-node primary"><strong>Cost Center</strong>Registered</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node primary"><strong>Project</strong>Registered</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node"><strong>metadata.json</strong>Validated</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node"><strong>databricks.yml</strong>Validated</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node"><strong>Bundle</strong>Built</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node primary"><strong>Databricks</strong>Deploy</div>
+    </div>
+</div>
+{% endblock %}
