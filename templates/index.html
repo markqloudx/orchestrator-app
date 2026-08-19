@@ -1,492 +1,72 @@
 {% extends "base.html" %}
 
 {% block content %}
-
-<!-- ============================================================ -->
-<!-- EXECUTIVE VIEW - Dashboard                                     -->
-<!-- ============================================================ -->
-
 <h1>Change Management Control Center</h1>
 <p class="muted">Cost Center → Project → Repository → Change → Approval → Pipeline → Databricks</p>
 <div class="red-line"></div>
 
-<!-- Metrics Cards -->
 <div class="grid grid-4">
-    <div class="card">
-        <div class="metric-label">Cost Centers</div>
-        <div class="metric-number blue" id="metricCostCenters">{{ cost_centers|length }}</div>
-    </div>
-    <div class="card">
-        <div class="metric-label">Projects</div>
-        <div class="metric-number blue" id="metricProjects">{{ projects|length }}</div>
-    </div>
-    <div class="card">
-        <div class="metric-label">Running Deployments</div>
-        <div class="metric-number orange" id="metricRunning">{{ running_count }}</div>
-    </div>
-    <div class="card">
-        <div class="metric-label">Approved Changes</div>
-        <div class="metric-number green" id="metricApproved">{{ approved_count }}</div>
-    </div>
+    <div class="card"><div class="metric-label">Cost Centers</div><div class="metric-number blue">{{ cost_centers|length }}</div></div>
+    <div class="card"><div class="metric-label">Projects</div><div class="metric-number blue">{{ projects|length }}</div></div>
+    <div class="card"><div class="metric-label">Running</div><div class="metric-number orange">{{ running_count }}</div></div>
+    <div class="card"><div class="metric-label">Approved</div><div class="metric-number green">{{ approved_count }}</div></div>
 </div>
 
-<!-- End-to-End Flow Diagram -->
 <div class="card">
-    <h2>End-to-End Change Management</h2>
+    <h2>End-to-End Flow</h2>
     <div class="flow">
-        <div class="flow-node primary"><strong>Cost Center</strong>Business Parent</div>
+        <div class="flow-node primary"><strong>Cost Center</strong>Parent</div>
         <div class="flow-arrow">→</div>
         <div class="flow-node primary"><strong>Project</strong>Child</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Repository</strong>Git Source</div>
+        <div class="flow-node primary"><strong>Repository</strong>Git</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node"><strong>Change</strong>Commit / Release</div>
+        <div class="flow-node"><strong>Change</strong>Commit</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Approval</strong>Governance Gate</div>
+        <div class="flow-node primary"><strong>Approval</strong>Gate</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node"><strong>CI/CD Pipeline</strong>Build / Deploy</div>
+        <div class="flow-node"><strong>CI/CD</strong>Pipeline</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Databricks</strong>QA / PROD</div>
+        <div class="flow-node primary"><strong>Databricks</strong>Deploy</div>
     </div>
 </div>
 
-<!-- Two Column: Cost Centers + Current Deployment -->
 <div class="grid grid-2">
-
-    <!-- Cost Center Portfolio -->
     <div class="card">
-        <h2>Cost Center Portfolio</h2>
+        <h2>Cost Centers</h2>
         <table>
-            <thead>
-                <tr>
-                    <th>Cost Center</th>
-                    <th>Perspective</th>
-                    <th>Projects</th>
-                    <th>Running</th>
-                </tr>
-            </thead>
+            <thead><tr><th>ID</th><th>Name</th></tr></thead>
             <tbody>
                 {% for cc in cost_centers %}
-                <tr>
-                    <td>
-                        <strong>{{ cc.cc_id }}</strong><br>
-                        <span class="muted">{{ cc.name }}</span>
-                    </td>
-                    <td>{{ cc.perspective }}</td>
-                    <td>{{ cc.project_count or 0 }}</td>
-                    <td>{{ cc.running_count or 0 }}</td>
-                </tr>
+                <tr><td>{{ cc.cc_id }}</td><td>{{ cc.name }}</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
-
-    <!-- Current Deployment -->
     <div class="card">
         <h2>Current Deployment</h2>
-        <div id="dashboardDeployment">
-            {% if active_deployment %}
-            <div class="notice">
-                <strong>{{ active_deployment.change_id }}</strong><br>
-                Project: {{ active_deployment.project_id }}<br>
-                Status: <span class="badge badge-running">{{ active_deployment.deployment_status }}</span>
-            </div>
-            {% else %}
-            <div class="notice">No active production deployment.</div>
-            {% endif %}
-        </div>
-    </div>
-
-</div>
-
-<!-- ============================================================ -->
-<!-- ALL PROJECTS TABLE (Executive View)                          -->
-<!-- ============================================================ -->
-
-<div class="card" style="margin-top:20px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
-        <h2 style="margin:0;">📁 All Projects</h2>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-red" onclick="openProjectModal()">+ Register Project</button>
-            <button class="btn btn-green" onclick="refreshAllProjects()">🔄 Refresh All</button>
-        </div>
-    </div>
-
-    <div style="overflow-x:auto;">
-        <table>
-            <thead>
-                <tr>
-                    <th>Project</th>
-                    <th>Cost Center</th>
-                    <th>Repository</th>
-                    <th>Status</th>
-                    <th>Branch</th>
-                    <th>Running</th>
-                    <th>Completed</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody id="projectTableBody">
-                {% for p in projects %}
-                <tr id="project-row-{{ p.project_id }}">
-                    <td>
-                        <strong>{{ p.project_id }}</strong><br>
-                        <span class="muted">{{ p.name }}</span>
-                    </td>
-                    <td>
-                        <strong>{{ p.cost_center_id }}</strong><br>
-                        <span class="muted">{{ p.cost_center_name or '' }}</span>
-                    </td>
-                    <td>
-                        <strong>{{ p.provider }}</strong><br>
-                        <span class="muted">{{ p.repository_name or p.repository_url or '-' }}</span>
-                    </td>
-                    <td>
-                        <span class="badge badge-{{ p.aws_status.lower() if p.aws_status else 'grey' }}" id="status-{{ p.project_id }}">
-                            {{ p.aws_status or 'PENDING' }}
-                        </span>
-                        <br>
-                        <span class="muted" id="connection-{{ p.project_id }}">{{ p.aws_connection or '-' }}</span>
-                    </td>
-                    <td><code>{{ p.branch or 'main' }}</code></td>
-                    <td id="running-{{ p.project_id }}">{{ p.running or 0 }}</td>
-                    <td id="completed-{{ p.project_id }}">{{ p.completed or 0 }}</td>
-                    <td>
-                        <button class="btn btn-sm btn-green" onclick="verifyProject('{{ p.project_id }}')">Verify</button>
-                        <button class="btn btn-sm" onclick="detectChanges('{{ p.project_id }}')">Detect</button>
-                        <button class="btn btn-sm btn-red" onclick="deleteProject('{{ p.project_id }}')">🗑</button>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="8" style="text-align:center;color:#888;padding:30px;">
-                        No projects registered yet. Click "+ Register Project" to get started.
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        {% if active_deployment %}
+        <div class="notice"><strong>{{ active_deployment.change_id }}</strong><br>Status: {{ active_deployment.deployment_status }}</div>
+        {% else %}
+        <div class="notice">No active deployment</div>
+        {% endif %}
     </div>
 </div>
 
-<!-- Recent Changes -->
 <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
-        <h2 style="margin:0;">📋 Recent Changes</h2>
-        <button class="btn btn-outline" onclick="window.location.href='/changes'">View All</button>
-    </div>
+    <h2>Recent Changes</h2>
     <table>
-        <thead>
-            <tr>
-                <th>Change ID</th>
-                <th>Project</th>
-                <th>Commit</th>
-                <th>Approval</th>
-                <th>Status</th>
-                <th>Created</th>
-            </tr>
-        </thead>
+        <thead><tr><th>ID</th><th>Project</th><th>Status</th><th>Created</th></tr></thead>
         <tbody>
             {% for c in recent_changes %}
             <tr>
-                <td><strong>{{ c.change_id }}</strong></td>
+                <td>{{ c.change_id }}</td>
                 <td>{{ c.project_id }}</td>
-                <td><code>{{ c.commit_sha[:8] if c.commit_sha else '-' }}</code></td>
                 <td><span class="badge badge-{{ c.approval_status.lower() }}">{{ c.approval_status }}</span></td>
-                <td><span class="badge badge-{{ c.deployment_status.lower() }}">{{ c.deployment_status }}</span></td>
                 <td>{{ c.created_at[:16] if c.created_at else '-' }}</td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="6" style="text-align:center;color:#888;padding:20px;">No changes yet</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
-
-<!-- Governance Principle -->
-<div class="card">
-    <h2>Governance Principle</h2>
-    <div class="notice">
-        <strong>Cost Center is the parent.</strong>
-        Every project must belong to a registered Cost Center.
-        Every project must have a registered source repository.
-        Every production change must have an approval.
-        Every deployment must carry project, repository, commit, release and metadata information.
-    </div>
-</div>
-
-<!-- ============================================================ -->
-<!-- SCRIPTS                                                       -->
-<!-- ============================================================ -->
-
-<script>
-// ============================================================
-// REFRESH ALL PROJECTS
-// ============================================================
-
-function refreshAllProjects() {
-    showToast('🔄 Refreshing all projects...', 'info');
-    fetch('/api/projects')
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                showToast('✅ Projects refreshed!', 'success');
-                setTimeout(() => location.reload(), 1000);
-            }
-        })
-        .catch(err => showToast('❌ Error: ' + err.message, 'error'));
-}
-
-// ============================================================
-// VERIFY PROJECT - Check GitHub Repository Status
-// ============================================================
-
-function verifyProject(projectId) {
-    showToast('🔍 Verifying project ' + projectId + '...', 'info');
-    
-    const row = document.getElementById('project-row-' + projectId);
-    const statusBadge = document.getElementById('status-' + projectId);
-    
-    fetch('/api/projects/' + projectId + '/verify')
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                if (data.connected) {
-                    statusBadge.className = 'badge badge-ok';
-                    statusBadge.textContent = 'CONNECTED';
-                    showToast('✅ Repository connected! Branches: ' + (data.branches || []).join(', '), 'success');
-                } else {
-                    statusBadge.className = 'badge badge-fail';
-                    statusBadge.textContent = 'NOT CONNECTED';
-                    showToast('❌ Repository not connected or not found', 'error');
-                }
-                // Update connection info
-                const connSpan = document.getElementById('connection-' + projectId);
-                if (data.branches) {
-                    connSpan.textContent = 'branches: ' + data.branches.length;
-                }
-            } else {
-                showToast('❌ Error: ' + data.error, 'error');
-            }
-        })
-        .catch(err => showToast('❌ Error: ' + err.message, 'error'));
-}
-
-// ============================================================
-// DETECT CHANGES
-// ============================================================
-
-function detectChanges(projectId) {
-    const branch = prompt('Enter branch name to detect changes from:', 'main');
-    if (branch === null) return;
-    
-    showToast('🔍 Detecting changes for ' + projectId + '...', 'info');
-    
-    fetch('/api/detect-changes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: projectId, branch: branch || 'main' })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success && data.changes.length > 0) {
-            let msg = '✅ Detected ' + data.changes.length + ' changes:\n';
-            data.changes.forEach(c => {
-                msg += '  - ' + c.file + ' (' + c.type + ')\n';
-            });
-            msg += '\nCreate change request?';
-            
-            if (confirm(msg)) {
-                const files = data.changes.map(c => ({ file: c.file, type: c.type }));
-                const commit = data.commits && data.commits[0] ? data.commits[0].sha : 'auto-detected';
-                
-                fetch('/api/changes', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        project_id: projectId,
-                        commit_sha: commit,
-                        release_version: 'v1.0.' + Math.floor(Math.random() * 1000 + 100),
-                        description: 'Auto-detected ' + data.changes.length + ' changes from branch ' + (branch || 'main'),
-                        files_changed: files,
-                        branch: branch || 'main'
-                    })
-                })
-                .then(r => r.json())
-                .then(result => {
-                    if (result.success) {
-                        showToast('✅ Change ' + result.data.change_id + ' created!', 'success');
-                        setTimeout(() => location.reload(), 1500);
-                    } else {
-                        showToast('❌ ' + result.error, 'error');
-                    }
-                });
-            }
-        } else if (data.success && data.changes.length === 0) {
-            showToast('✅ No changes detected between DEV and PROD for branch ' + (branch || 'main'), 'success');
-        } else {
-            showToast('❌ ' + (data.error || 'Unknown error'), 'error');
-        }
-    })
-    .catch(err => showToast('❌ Error: ' + err.message, 'error'));
-}
-
-// ============================================================
-// DELETE PROJECT
-// ============================================================
-
-function deleteProject(projectId) {
-    if (!confirm('⚠️ Delete project ' + projectId + '? This will remove all associated data.')) return;
-    
-    showToast('⏳ Deleting project...', 'info');
-    
-    fetch('/api/projects/' + projectId, {
-        method: 'DELETE'
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            showToast('✅ Project ' + projectId + ' deleted', 'success');
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            showToast('❌ ' + data.error, 'error');
-        }
-    })
-    .catch(err => showToast('❌ Error: ' + err.message, 'error'));
-}
-
-// ============================================================
-// PROJECT MODAL
-// ============================================================
-
-function openProjectModal() {
-    const costCenters = {{ cost_centers|tojson }};
-    const options = costCenters.map(c => 
-        `<option value="${c.cc_id}">${c.cc_id} — ${c.name}</option>`
-    ).join('');
-    
-    openModal('Register Project + Repository', `
-        <div class="grid grid-2">
-            <div class="form-group">
-                <label>Project ID</label>
-                <input id="newProjectId" value="PRJ-${Math.floor(Math.random()*900+100)}">
-            </div>
-            <div class="form-group">
-                <label>Cost Center Parent</label>
-                <select id="newProjectCC">${options}</select>
-            </div>
-        </div>
-        <div class="form-group">
-            <label>Project Name</label>
-            <input id="newProjectName" placeholder="Customer Analytics">
-        </div>
-        <div class="form-group">
-            <label>Repository Provider</label>
-            <select id="newProvider">
-                <option>GitHub</option>
-                <option>Bitbucket</option>
-                <option>AWS CodeCommit</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>Repository URL</label>
-            <input id="newRepoURL" placeholder="https://github.com/company/project">
-        </div>
-        <div class="grid grid-2">
-            <div class="form-group">
-                <label>Repository Name</label>
-                <input id="newRepoName" placeholder="customer-analytics">
-            </div>
-            <div class="form-group">
-                <label>Branch</label>
-                <input id="newBranch" value="main">
-            </div>
-        </div>
-        <div class="form-group">
-            <label>Repository Status</label>
-            <select id="newAWSStatus">
-                <option value="CONNECTED">Connected</option>
-                <option value="PENDING" selected>Pending</option>
-                <option value="NOT CONNECTED">Not Connected</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>AWS Connection Name</label>
-            <input id="newAWSConnection" placeholder="project-github-connection">
-        </div>
-        <button class="btn btn-red" onclick="createProject()">Register Project</button>
-    `);
-}
-
-// ============================================================
-// CREATE PROJECT
-// ============================================================
-
-function createProject() {
-    const data = {
-        project_id: document.getElementById('newProjectId').value.trim(),
-        name: document.getElementById('newProjectName').value.trim(),
-        cost_center_id: document.getElementById('newProjectCC').value,
-        provider: document.getElementById('newProvider').value,
-        repository_url: document.getElementById('newRepoURL').value.trim(),
-        repository_name: document.getElementById('newRepoName').value.trim(),
-        branch: document.getElementById('newBranch').value.trim(),
-        aws_status: document.getElementById('newAWSStatus').value,
-        aws_connection: document.getElementById('newAWSConnection').value.trim()
-    };
-    
-    if (!data.project_id || !data.name || !data.repository_url) {
-        showToast('Please fill all required fields', 'error');
-        return;
-    }
-    
-    showToast('⏳ Registering project...', 'info');
-    
-    fetch('/api/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-    })
-    .then(r => r.json())
-    .then(result => {
-        if (result.success) {
-            showToast('✅ Project ' + result.data.project_id + ' registered!', 'success');
-            closeModal();
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            showToast('❌ ' + result.error, 'error');
-        }
-    })
-    .catch(err => showToast('❌ Error: ' + err.message, 'error'));
-}
-
-// ============================================================
-// AUTO-REFRESH METRICS EVERY 30 SECONDS
-// ============================================================
-
-setInterval(() => {
-    // Refresh approved count
-    fetch('/api/changes?status=Approved')
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                document.getElementById('metricApproved').innerText = data.data.length;
-            }
-        });
-    
-    // Refresh running count
-    fetch('/api/projects')
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                const running = data.data.reduce((sum, p) => sum + (p.running || 0), 0);
-                document.getElementById('metricRunning').innerText = running;
-            }
-        });
-}, 30000);
-
-</script>
-
 {% endblock %}

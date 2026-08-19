@@ -1,164 +1,32 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>Live Deployment Control</h1>
-<p class="muted">Visual representation of the project-specific deployment lifecycle.</p>
+<h1>Live Deployment</h1>
+<p class="muted">Visual representation of deployment pipeline</p>
 
 <div class="card">
-    <div class="deployment-header">
-        <div>
-            <div class="muted">ACTIVE DEPLOYMENT</div>
-            <h2 id="deploymentTitle">No deployment running</h2>
-        </div>
-        <div id="deploymentStatus"><span class="badge badge-grey">IDLE</span></div>
-    </div>
-    <div class="red-line"></div>
-
-    <div class="deployment-flow">
-        <div class="deploy-step" id="step0">
-            <div class="deploy-circle">✓</div>
-            <div class="deploy-title">Change Approved</div>
-            <div class="deploy-detail">Governance Gate</div>
-        </div>
-        <div class="deploy-connector" id="connector0"></div>
-        
-        <div class="deploy-step" id="step1">
-            <div class="deploy-circle">1</div>
-            <div class="deploy-title">Bundle Validation</div>
-            <div class="deploy-detail">databricks.yml</div>
-        </div>
-        <div class="deploy-connector" id="connector1"></div>
-        
-        <div class="deploy-step" id="step2">
-            <div class="deploy-circle">2</div>
-            <div class="deploy-title">Bundle Build</div>
-            <div class="deploy-detail">Artifact</div>
-        </div>
-        <div class="deploy-connector" id="connector2"></div>
-        
-        <div class="deploy-step" id="step3">
-            <div class="deploy-circle">3</div>
-            <div class="deploy-title">CI/CD Pipeline</div>
-            <div class="deploy-detail">Deploy</div>
-        </div>
-        <div class="deploy-connector" id="connector3"></div>
-        
-        <div class="deploy-step" id="step4">
-            <div class="deploy-circle">4</div>
-            <div class="deploy-title">Databricks Validation</div>
-            <div class="deploy-detail">Workspace</div>
-        </div>
-        <div class="deploy-connector" id="connector4"></div>
-        
-        <div class="deploy-step" id="step5">
-            <div class="deploy-circle">5</div>
-            <div class="deploy-title">Deploying</div>
-            <div class="deploy-detail">Production</div>
-        </div>
-        <div class="deploy-connector" id="connector5"></div>
-        
-        <div class="deploy-step" id="step6">
-            <div class="deploy-circle">✓</div>
-            <div class="deploy-title">Complete</div>
-            <div class="deploy-detail">Release Live</div>
-        </div>
-    </div>
-
-    <div class="current-state">
-        <div class="current-icon" id="currentIcon">●</div>
-        <div>
-            <div class="muted">CURRENT STATE</div>
-            <h2 id="currentStage">Waiting for deployment</h2>
-            <div id="currentDescription">Select an approved change from the Change Register.</div>
-        </div>
+    <h2>Deployment Pipeline</h2>
+    <div class="flow">
+        <div class="flow-node primary"><strong>Change</strong>Approved</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node"><strong>Validate</strong>Bundle</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node"><strong>Build</strong>Artifact</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node"><strong>Deploy</strong>CI/CD</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node primary"><strong>Databricks</strong>Production</div>
     </div>
     <br>
-    <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:bold">
-        <span>Deployment Progress</span>
-        <span id="progressText">0%</span>
+    <div class="notice">
+        <strong>Status:</strong> Waiting for deployment
     </div>
-    <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
 </div>
-
-<br>
 
 <div class="grid grid-4">
-    <div class="card">
-        <div class="metric-label">Change ID</div>
-        <div class="metric-number" id="deploymentChange">—</div>
-    </div>
-    <div class="card">
-        <div class="metric-label">Commit</div>
-        <div class="metric-number" id="deploymentCommit">—</div>
-    </div>
-    <div class="card">
-        <div class="metric-label">Bundle</div>
-        <div class="metric-number" id="deploymentBundle">—</div>
-    </div>
-    <div class="card">
-        <div class="metric-label">Environment</div>
-        <div class="metric-number">PROD</div>
-    </div>
+    <div class="card"><div class="metric-label">Change ID</div><div class="metric-number">—</div></div>
+    <div class="card"><div class="metric-label">Commit</div><div class="metric-number">—</div></div>
+    <div class="card"><div class="metric-label">Environment</div><div class="metric-number">PROD</div></div>
+    <div class="card"><div class="metric-label">Status</div><div class="metric-number" style="font-size:20px;">IDLE</div></div>
 </div>
-
-<br>
-
-<div class="card">
-    <h2>Live Deployment Log</h2>
-    <div class="log" id="deploymentLog"><span style="color:#777">Waiting for deployment...</span></div>
-</div>
-
-<script>
-// Deployment stages
-const deploymentStages = [
-    { name: 'Change Approved', description: 'Governance Gate passed' },
-    { name: 'Bundle Validation', description: 'Validating databricks.yml' },
-    { name: 'Bundle Build', description: 'Creating deployment artifact' },
-    { name: 'CI/CD Pipeline', description: 'Deploying through pipeline' },
-    { name: 'Databricks Validation', description: 'Validating workspace' },
-    { name: 'Deploying to Production', description: 'Deploying to PROD' },
-    { name: 'Production Complete', description: 'Release live' }
-];
-
-let activeDeployment = null;
-
-function updateDeploymentUI() {
-    // This will be called when a deployment starts
-    const changeId = document.getElementById('deploymentChange').innerText;
-    if (changeId && changeId !== '—') {
-        // Deployment in progress
-        fetch('/api/deployment-logs?change_id=' + changeId)
-            .then(r => r.json())
-            .then(data => {
-                if (data.success && data.data.length > 0) {
-                    const logs = data.data;
-                    const latest = logs[0];
-                    
-                    // Update status
-                    document.getElementById('deploymentStatus').innerHTML = 
-                        `<span class="badge badge-running">${latest.status}</span>`;
-                    
-                    // Update progress
-                    const stageIndex = deploymentStages.findIndex(s => s.name === latest.stage);
-                    if (stageIndex >= 0) {
-                        const progress = ((stageIndex + 1) / deploymentStages.length) * 100;
-                        document.getElementById('progressBar').style.width = progress + '%';
-                        document.getElementById('progressText').innerText = Math.round(progress) + '%';
-                        document.getElementById('currentStage').innerText = latest.stage;
-                    }
-                    
-                    // Show logs
-                    const logContainer = document.getElementById('deploymentLog');
-                    logContainer.innerHTML = logs.map(l => 
-                        `<div><span class="log-time">[${l.created_at}]</span> ${l.details}</div>`
-                    ).join('');
-                }
-            });
-    }
-}
-
-// Refresh deployment status every 5 seconds
-setInterval(updateDeploymentUI, 5000);
-updateDeploymentUI();
-</script>
 {% endblock %}

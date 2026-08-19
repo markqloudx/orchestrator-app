@@ -2,88 +2,24 @@
 
 {% block content %}
 <h1>Repository Control</h1>
-<p class="muted">Technical reference for the project source-control integration.</p>
 
 <div class="card">
-    <h2>Supported Repository Model</h2>
+    <h2>GitHub Integration</h2>
+    <table>
+        <tr><td>DEV Repository</td><td><strong>{{ github_dev or 'Not Configured' }}</strong></td></tr>
+        <tr><td>PROD Repository</td><td><strong>{{ github_prod or 'Not Configured' }}</strong></td></tr>
+        <tr><td>Status</td><td><span class="badge badge-ok">● Connected</span></td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Supported Providers</h2>
     <div class="flow">
-        <div class="flow-node primary"><strong>GitHub</strong>Source Repository</div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Bitbucket</strong>Source Repository</div>
+        <div class="flow-node primary"><strong>GitHub</strong>Source</div>
         <div class="flow-arrow">→</div>
         <div class="flow-node"><strong>CI/CD</strong>Pipeline</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Databricks</strong>Deployment</div>
+        <div class="flow-node primary"><strong>Databricks</strong>Deploy</div>
     </div>
-</div>
-
-<br>
-
-<div class="grid grid-2">
-    <div class="card">
-        <h2>Project Repository Example</h2>
-        <div class="repo-box">
-            <div class="repo-provider">GITHUB</div>
-            <br>
-            <strong>Customer Analytics</strong>
-            <p class="repo-url">{{ github_dev or 'https://github.com/example/customer-analytics' }}</p>
-            <p class="muted">Branch: main</p>
-            <span class="badge badge-ok">● CONNECTED</span>
-        </div>
-        <br>
-        <div class="repo-box">
-            <div class="repo-provider">BITBUCKET</div>
-            <br>
-            <strong>Finance Reporting</strong>
-            <p class="repo-url">https://bitbucket.org/example/finance-reporting</p>
-            <p class="muted">Branch: main</p>
-            <span class="badge badge-ok">● CONNECTED</span>
-        </div>
-    </div>
-
-    <div class="card">
-        <h2>Integration Control</h2>
-        <table>
-            <tr>
-                <td>Repository Provider</td>
-                <td><strong>GitHub</strong></td>
-            </tr>
-            <tr>
-                <td>DEV Repo</td>
-                <td>{{ github_dev or 'Not Configured' }}</td>
-            </tr>
-            <tr>
-                <td>PROD Repo</td>
-                <td>{{ github_prod or 'Not Configured' }}</td>
-            </tr>
-            <tr>
-                <td>Connection Status</td>
-                <td>
-                    {% if github_dev %}
-                        <span class="badge badge-ok">● CONNECTED</span>
-                    {% else %}
-                        <span class="badge badge-grey">● NOT CONFIGURED</span>
-                    {% endif %}
-                </td>
-            </tr>
-            <tr>
-                <td>Databricks Status</td>
-                <td>
-                    {% if databricks_configured %}
-                        <span class="badge badge-ok">● CONNECTED</span>
-                    {% else %}
-                        <span class="badge badge-grey">● NOT CONFIGURED</span>
-                    {% endif %}
-                </td>
-            </tr>
-        </table>
-    </div>
-</div>
-
-<br>
-
-<div class="notice">
-    <strong>Important:</strong> This prototype demonstrates the governance and integration model.
-    Actual GitHub credentials and Databricks workspace authentication are configured in the environment variables.
 </div>
 {% endblock %}

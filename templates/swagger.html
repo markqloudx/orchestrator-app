@@ -2,177 +2,25 @@
 
 {% block content %}
 <h1>📚 API Documentation</h1>
-<p class="muted">REST API endpoints for the Databricks Orchestrator.</p>
 
 <div class="card">
-    <h2>Base URL</h2>
-    <p><code>/api/</code></p>
-</div>
-
-<div class="card">
-    <h2>Authentication</h2>
-    <p>All API endpoints use the Databricks App's environment variables for authentication.</p>
-</div>
-
-<div class="card">
-    <h2>Endpoints</h2>
+    <h2>Available Endpoints</h2>
     <table>
-        <thead>
-            <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
-        </thead>
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
         <tbody>
-            <!-- Cost Centers -->
-            <tr>
-                <td><span class="badge badge-ok">GET</span></td>
-                <td><code>/api/cost-centers</code></td>
-                <td>Get all cost centers</td>
-            </tr>
-            <tr>
-                <td><span class="badge badge-running">POST</span></td>
-                <td><code>/api/cost-centers</code></td>
-                <td>Create a new cost center</td>
-            </tr>
-            
-            <!-- Projects -->
-            <tr>
-                <td><span class="badge badge-ok">GET</span></td>
-                <td><code>/api/projects</code></td>
-                <td>Get all projects</td>
-            </tr>
-            <tr>
-                <td><span class="badge badge-running">POST</span></td>
-                <td><code>/api/projects</code></td>
-                <td>Create a new project</td>
-            </tr>
-            <tr>
-                <td><span class="badge badge-ok">GET</span></td>
-                <td><code>/api/projects/{id}/verify</code></td>
-                <td>Verify GitHub repository</td>
-            </tr>
-            <tr>
-                <td><span class="badge badge-ok">GET</span></td>
-                <td><code>/api/projects/{id}/branches</code></td>
-                <td>Get repository branches</td>
-            </tr>
-            <tr>
-                <td><span class="badge badge-ok">GET</span></td>
-                <td><code>/api/projects/{id}/commits</code></td>
-                <td>Get commits from branch</td>
-            </tr>
-            
-            <!-- Changes -->
-            <tr>
-                <td><span class="badge badge-ok">GET</span></td>
-                <td><code>/api/changes</code></td>
-                <td>Get all changes</td>
-            </tr>
-            <tr>
-                <td><span class="badge badge-running">POST</span></td>
-                <td><code>/api/changes</code></td>
-                <td>Create a change request</td>
-            </tr>
-            <tr>
-                <td><span class="badge badge-running">POST</span></td>
-                <td><code>/api/detect-changes</code></td>
-                <td>Detect changes between repos</td>
-            </tr>
-            
-            <!-- Approval -->
-            <tr>
-                <td><span class="badge badge-running">POST</span></td>
-                <td><code>/api/changes/{id}/approve</code></td>
-                <td>Approve a change</td>
-            </tr>
-            <tr>
-                <td><span class="badge badge-running">POST</span></td>
-                <td><code>/api/changes/{id}/reject</code></td>
-                <td>Reject a change</td>
-            </tr>
-            <tr>
-                <td><span class="badge badge-running">POST</span></td>
-                <td><code>/api/changes/{id}/deploy</code></td>
-                <td>Deploy a change to PROD</td>
-            </tr>
-            
-            <!-- Logs & Audit -->
-            <tr>
-                <td><span class="badge badge-ok">GET</span></td>
-                <td><code>/api/deployment-logs</code></td>
-                <td>Get deployment logs</td>
-            </tr>
-            <tr>
-                <td><span class="badge badge-ok">GET</span></td>
-                <td><code>/api/audit</code></td>
-                <td>Get audit trail</td>
-            </tr>
-            
-            <!-- System -->
-            <tr>
-                <td><span class="badge badge-ok">GET</span></td>
-                <td><code>/health</code></td>
-                <td>Health check</td>
-            </tr>
-            <tr>
-                <td><span class="badge badge-ok">GET</span></td>
-                <td><code>/swagger</code></td>
-                <td>API documentation</td>
-            </tr>
+            <tr><td><span class="badge badge-ok">GET</span></td><td>/api/cost-centers</td><td>List cost centers</td></tr>
+            <tr><td><span class="badge badge-ok">GET</span></td><td>/api/projects</td><td>List projects</td></tr>
+            <tr><td><span class="badge badge-ok">POST</span></td><td>/api/projects</td><td>Create project</td></tr>
+            <tr><td><span class="badge badge-ok">GET</span></td><td>/api/changes</td><td>List changes</td></tr>
+            <tr><td><span class="badge badge-ok">POST</span></td><td>/api/changes</td><td>Create change</td></tr>
+            <tr><td><span class="badge badge-ok">POST</span></td><td>/api/detect-changes</td><td>Detect changes</td></tr>
+            <tr><td><span class="badge badge-ok">POST</span></td><td>/api/changes/{id}/approve</td><td>Approve change</td></tr>
+            <tr><td><span class="badge badge-ok">POST</span></td><td>/api/changes/{id}/reject</td><td>Reject change</td></tr>
+            <tr><td><span class="badge badge-ok">POST</span></td><td>/api/changes/{id}/deploy</td><td>Deploy change</td></tr>
+            <tr><td><span class="badge badge-ok">GET</span></td><td>/api/deployment-logs</td><td>Get logs</td></tr>
+            <tr><td><span class="badge badge-ok">GET</span></td><td>/api/audit</td><td>Get audit trail</td></tr>
+            <tr><td><span class="badge badge-ok">GET</span></td><td>/health</td><td>Health check</td></tr>
         </tbody>
     </table>
-</div>
-
-<div class="card">
-    <h2>Example: Detect Changes</h2>
-    <pre style="background:#f5f5f5;padding:15px;border-radius:8px;">
-curl -X POST /api/detect-changes \
-  -H "Content-Type: application/json" \
-  -d '{"project_id": "PRJ-001", "branch": "main"}'
-
-Response:
-{
-  "success": true,
-  "changes": [
-    {"file": "notebook.py", "type": "new"},
-    {"file": "databricks.yml", "type": "modified"}
-  ],
-  "count": 2
-}</pre>
-</div>
-
-<div class="card">
-    <h2>Example: Create Change Request</h2>
-    <pre style="background:#f5f5f5;padding:15px;border-radius:8px;">
-curl -X POST /api/changes \
-  -H "Content-Type: application/json" \
-  -d '{
-    "project_id": "PRJ-001",
-    "commit_sha": "8f3a91c2d7",
-    "release_version": "v1.0.184",
-    "description": "Analytics pipeline update"
-  }'
-
-Response:
-{
-  "success": true,
-  "data": {
-    "change_id": "CHG-2026-0042",
-    "approval_status": "Pending",
-    "deployment_status": "Blocked"
-  }
-}</pre>
-</div>
-
-<div class="card">
-    <h2>Example: Approve and Deploy</h2>
-    <pre style="background:#f5f5f5;padding:15px;border-radius:8px;">
-# Approve
-curl -X POST /api/changes/CHG-2026-0042/approve \
-  -H "Content-Type: application/json" \
-  -d '{"approver": "admin"}'
-
-# Deploy
-curl -X POST /api/changes/CHG-2026-0042/deploy \
-  -H "Content-Type: application/json" \
-  -d '{"deployer": "admin"}'</pre>
 </div>
 {% endblock %}

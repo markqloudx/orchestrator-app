@@ -1,114 +1,49 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>Approval Workflow</h1>
-<p class="muted">Review and approve pending change requests before deployment.</p>
+<h1>Approvals</h1>
 
 <div class="card">
     <h2>Pending Approvals ({{ changes|length }})</h2>
     <br>
     {% if changes %}
     <table>
-        <thead>
-            <tr>
-                <th>Change ID</th>
-                <th>Project</th>
-                <th>Description</th>
-                <th>Files</th>
-                <th>Created</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
+        <thead><tr><th>ID</th><th>Project</th><th>Commit</th><th>Actions</th></tr></thead>
         <tbody>
             {% for c in changes %}
             <tr>
-                <td><strong>{{ c.change_id }}</strong></td>
-                <td>{{ c.project_id }}<br><span class="muted">{{ c.project_name or '' }}</span></td>
-                <td>{{ c.description or '-' }}</td>
+                <td>{{ c.change_id }}</td>
+                <td>{{ c.project_id }}</td>
+                <td><code>{{ c.commit_sha[:8] if c.commit_sha else '-' }}</code></td>
                 <td>
-                    {% if c.files_changed %}
-                        {% set files = c.files_changed|tojson|fromjson %}
-                        {{ files|length }} file(s)
-                    {% else %}
-                        0 files
-                    {% endif %}
-                </td>
-                <td>{{ c.created_at[:16] if c.created_at else '-' }}</td>
-                <td>
-                    <button class="btn btn-sm btn-green" onclick="approveChange('{{ c.change_id }}')">✅ Approve</button>
-                    <button class="btn btn-sm" onclick="rejectChange('{{ c.change_id }}')">❌ Reject</button>
-                    <button class="btn btn-sm btn-red" onclick="deployChange('{{ c.change_id }}')">🚀 Deploy</button>
+                    <button class="btn btn-sm btn-green" onclick="approve('{{ c.change_id }}')">Approve</button>
+                    <button class="btn btn-sm" onclick="reject('{{ c.change_id }}')">Reject</button>
                 </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
     {% else %}
-    <div style="text-align:center;padding:40px;color:#888;">
-        <div style="font-size:48px;margin-bottom:16px;">🎉</div>
-        <div style="font-size:18px;font-weight:600;">No pending approvals</div>
-        <div style="font-size:14px;margin-top:8px;">All changes have been reviewed</div>
-    </div>
+    <p style="text-align:center;color:#888;padding:30px;">🎉 No pending approvals</p>
     {% endif %}
 </div>
 
 <script>
-function approveChange(changeId) {
-    if (!confirm('Approve change ' + changeId + '?')) return;
-    
-    fetch('/api/changes/' + changeId + '/approve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approver: 'databricks-user' })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            showToast('✅ Change ' + changeId + ' approved!', 'success');
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            showToast('❌ ' + data.error, 'error');
-        }
-    });
+function approve(id) {
+    if(!confirm('Approve '+id+'?')) return;
+    fetch('/api/changes/'+id+'/approve', {method:'POST'})
+        .then(r=>r.json())
+        .then(d=>{if(d.success){alert('✅ Approved');location.reload();}else alert('❌ '+d.error);});
 }
 
-function rejectChange(changeId) {
-    const reason = prompt('Reason for rejection:');
-    if (reason === null) return;
-    
-    fetch('/api/changes/' + changeId + '/reject', {
+function reject(id) {
+    const reason = prompt('Reason:');
+    if(reason===null) return;
+    fetch('/api/changes/'+id+'/reject', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approver: 'databricks-user', reason: reason || 'No reason' })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            showToast('❌ Change ' + changeId + ' rejected', 'error');
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            showToast('❌ ' + data.error, 'error');
-        }
-    });
-}
-
-function deployChange(changeId) {
-    if (!confirm('Deploy change ' + changeId + ' to PROD?')) return;
-    
-    fetch('/api/changes/' + changeId + '/deploy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deployer: 'databricks-user' })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            showToast('🚀 Change ' + changeId + ' deployed!', 'success');
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            showToast('❌ ' + data.error, 'error');
-        }
-    });
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({reason: reason})
+    }).then(r=>r.json()).then(d=>{if(d.success){alert('❌ Rejected');location.reload();}else alert('❌ '+d.error);});
 }
 </script>
 {% endblock %}

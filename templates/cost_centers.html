@@ -1,24 +1,59 @@
 {% extends "base.html" %}
+
 {% block content %}
-<h1>Cost Center Registry</h1>
-<p class="muted">Cost Center is the parent entity for all projects.</p>
-<button class="btn btn-red" onclick="openCostCenterModal()">+ Add Cost Center</button>
+<h1>Cost Centers</h1>
+<button class="btn btn-red" onclick="openModal()">+ Add Cost Center</button>
 <br><br>
+
 <div class="card">
     <table>
-        <thead><tr><th>Cost Center</th><th>Perspective</th><th>Owner</th><th>Projects</th><th>Running</th><th>Completed</th></tr></thead>
+        <thead><tr><th>ID</th><th>Name</th><th>Perspective</th><th>Owner</th></tr></thead>
         <tbody>
-            {% for cc in centers %}
+            {% for c in centers %}
             <tr>
-                <td><strong>{{ cc.cc_id }}</strong><br>{{ cc.name }}</td>
-                <td>{{ cc.perspective }}</td>
-                <td>{{ cc.owner }}</td>
-                <td>{{ cc.project_count or 0 }}</td>
-                <td>{{ cc.running_count or 0 }}</td>
-                <td>{{ cc.completed_count or 0 }}</td>
+                <td><strong>{{ c.cc_id }}</strong></td>
+                <td>{{ c.name }}</td>
+                <td>{{ c.perspective }}</td>
+                <td>{{ c.owner }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+
+<script>
+function openModal() {
+    const html = `
+        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;display:flex;align-items:center;justify-content:center;">
+            <div style="background:#fff;padding:30px;border-radius:10px;max-width:400px;width:90%;">
+                <h2>Add Cost Center</h2>
+                <div style="margin:10px 0"><label>ID</label><br><input id="ccid" placeholder="CC-5100" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:5px"></div>
+                <div style="margin:10px 0"><label>Name</label><br><input id="ccname" placeholder="Technology" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:5px"></div>
+                <div style="margin:10px 0"><label>Perspective</label><br><input id="ccpers" placeholder="Technology" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:5px"></div>
+                <div style="margin:10px 0"><label>Owner</label><br><input id="ccowner" placeholder="Tech Owner" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:5px"></div>
+                <button onclick="createCC()" class="btn btn-red" style="width:100%;padding:10px;">Create</button>
+                <button onclick="document.querySelectorAll('div[style*="position:fixed"]').forEach(e=>e.remove())" style="margin-top:10px;width:100%;padding:10px;border:none;background:#eee;border-radius:5px;cursor:pointer">Cancel</button>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function createCC() {
+    const data = {
+        cc_id: document.getElementById('ccid').value,
+        name: document.getElementById('ccname').value,
+        perspective: document.getElementById('ccpers').value,
+        owner: document.getElementById('ccowner').value
+    };
+    fetch('/api/cost-centers', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(data)
+    }).then(r=>r.json()).then(d=>{
+        if(d.success){alert('✅ Created!');location.reload();}
+        else alert('❌ '+d.error);
+    });
+}
+</script>
 {% endblock %}
