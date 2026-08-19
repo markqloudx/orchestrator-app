@@ -10,10 +10,11 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default-secret-key')
 
 # ============================================================
-# CONFIGURATION
+# ⚠️ GITHUB TOKEN - HARDCODED FOR DEMO
 # ============================================================
 
-GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
+# Replace this with your actual GitHub token
+GITHUB_TOKEN = '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'  # ← PUT YOUR TOKEN HERE!
 
 # ============================================================
 # DATABASE
@@ -74,7 +75,7 @@ def init_db():
                     approval_status TEXT DEFAULT 'PENDING',
                     deployment_status TEXT DEFAULT 'BLOCKED',
                     github_action_run_id INTEGER,
-                    github_action_status TEXT DEFAULT 'PENDING',
+                    github_action_status TEXT DEFAULT 'NOT_TRIGGERED',
                     github_action_url TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     approved_at TIMESTAMP,
@@ -119,15 +120,22 @@ class GitHubClient:
             'Authorization': f'token {token}',
             'Accept': 'application/vnd.github.v3+json'
         }
+        self.is_configured = bool(token)
     
     def verify_repo(self, repo_name):
+        if not self.is_configured:
+            return False
         try:
             r = requests.get(f'https://api.github.com/repos/{repo_name}', headers=self.headers)
+            print(f"🔍 Verifying repo {repo_name}: {r.status_code}")
             return r.status_code == 200
-        except:
+        except Exception as e:
+            print(f"❌ Error verifying repo: {e}")
             return False
     
     def get_pull_requests(self, repo_name, state='open'):
+        if not self.is_configured:
+            return []
         try:
             r = requests.get(
                 f'https://api.github.com/repos/{repo_name}/pulls?state={state}&per_page=100',
@@ -140,6 +148,8 @@ class GitHubClient:
             return []
     
     def get_pr_files(self, repo_name, pr_number):
+        if not self.is_configured:
+            return []
         try:
             r = requests.get(
                 f'https://api.github.com/repos/{repo_name}/pulls/{pr_number}/files',
@@ -152,16 +162,21 @@ class GitHubClient:
             return []
     
     def trigger_github_action(self, repo_name, workflow_id='sync.yml', ref='main'):
-        """Trigger GitHub Action workflow"""
+        if not self.is_configured:
+            return False
         url = f'https://api.github.com/repos/{repo_name}/actions/workflows/{workflow_id}/dispatches'
         payload = {'ref': ref}
         try:
             r = requests.post(url, headers=self.headers, json=payload)
+            print(f"🚀 Trigger GitHub Action: {r.status_code}")
             return r.status_code == 204
-        except:
+        except Exception as e:
+            print(f"❌ Error triggering action: {e}")
             return False
     
-    def get_workflow_runs(self, repo_name, limit=5):
+    def get_workflow_runs(self, repo_name, limit=1):
+        if not self.is_configured:
+            return []
         url = f'https://api.github.com/repos/{repo_name}/actions/runs'
         try:
             r = requests.get(url, headers=self.headers, params={'per_page': limit})
@@ -172,6 +187,8 @@ class GitHubClient:
             return []
     
     def get_workflow_run_status(self, repo_name, run_id):
+        if not self.is_configured:
+            return None
         url = f'https://api.github.com/repos/{repo_name}/actions/runs/{run_id}'
         try:
             r = requests.get(url, headers=self.headers)
@@ -187,6 +204,8 @@ class GitHubClient:
             return None
     
     def sync_prs_to_db(self, source_repo, project_id):
+        if not self.is_configured:
+            return 0
         prs = self.get_pull_requests(source_repo)
         synced_count = 0
         
@@ -208,7 +227,7 @@ class GitHubClient:
                         (change_id, project_id, pr_number, pr_url, pr_title, pr_author, 
                          commit_sha, description, files_changed, source_branch, target_branch, 
                          approval_status, github_action_status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING')
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'NOT_TRIGGERED')
                     ''', (
                         change_id,
                         project_id,
@@ -252,20 +271,21 @@ def index():
                          changes=changes,
                          pending_count=pending,
                          approved_count=approved,
-                         merged_count=merged)
+                         merged_count=merged,
+                         github_configured=bool(GITHUB_TOKEN))
 
 @app.route('/projects')
 def projects_page():
     with get_db() as conn:
         projects = conn.execute('SELECT * FROM projects ORDER BY created_at DESC').fetchall()
-    return render_template('projects.html', projects=projects)
+    return render_template('projects.html', projects=projects, github_configured=bool(GITHUB_TOKEN))
 
 @app.route('/changes')
 def changes_page():
     with get_db() as conn:
         changes = conn.execute('SELECT * FROM changes ORDER BY created_at DESC').fetchall()
         projects = conn.execute('SELECT project_id, name, source_repo_name, target_repo_name FROM projects').fetchall()
-    return render_template('changes.html', changes=changes, projects=projects)
+    return render_template('changes.html', changes=changes, projects=projects, github_configured=bool(GITHUB_TOKEN))
 
 @app.route('/approvals')
 def approvals_page():
@@ -315,7 +335,7 @@ def api_create_project():
             
             source_valid = False
             target_valid = False
-            if github_client:
+            if github_client and github_client.is_configured:
                 source_valid = github_client.verify_repo(source_name)
                 target_valid = github_client.verify_repo(target_name)
             
@@ -345,7 +365,7 @@ def api_create_project():
             project = conn.execute('SELECT * FROM projects WHERE project_id = ?', (data['project_id'],)).fetchone()
             
             synced = 0
-            if github_client and source_valid:
+            if github_client and github_client.is_configured and source_valid:
                 synced = github_client.sync_prs_to_db(source_name, data['project_id'])
             
             return jsonify({'success': True, 'data': dict(project), 'prs_synced': synced})
@@ -360,8 +380,11 @@ def api_verify_project(project_id):
             if not project:
                 return jsonify({'success': False, 'error': 'Project not found'}), 404
             
-            if not github_client:
-                return jsonify({'success': False, 'error': 'GitHub not configured'}), 400
+            if not github_client or not github_client.is_configured:
+                return jsonify({
+                    'success': False, 
+                    'error': 'GitHub not configured. Please set GITHUB_TOKEN.'
+                }), 400
             
             source_name = project['source_repo_name']
             target_name = project['target_repo_name']
@@ -404,8 +427,11 @@ def api_sync_prs(project_id):
             if not project:
                 return jsonify({'success': False, 'error': 'Project not found'}), 404
             
-            if not github_client:
-                return jsonify({'success': False, 'error': 'GitHub not configured'}), 400
+            if not github_client or not github_client.is_configured:
+                return jsonify({
+                    'success': False, 
+                    'error': 'GitHub not configured. Please set GITHUB_TOKEN.'
+                }), 400
             
             source_name = project['source_repo_name']
             synced = github_client.sync_prs_to_db(source_name, project_id)
@@ -501,13 +527,11 @@ def api_merge_change(change_id):
             project = conn.execute('SELECT * FROM projects WHERE project_id = ?', (change['project_id'],)).fetchone()
             target_repo = project['target_repo_name']
             
-            # TRIGGER GITHUB ACTION
             action_triggered = False
-            if github_client:
+            if github_client and github_client.is_configured:
                 action_triggered = github_client.trigger_github_action(target_repo, 'sync.yml', 'main')
                 
                 if action_triggered:
-                    # Get the latest workflow run
                     runs = github_client.get_workflow_runs(target_repo, 1)
                     if runs:
                         run = runs[0]
@@ -537,8 +561,7 @@ def api_merge_change(change_id):
             return jsonify({
                 'success': True, 
                 'data': dict(change),
-                'action_triggered': action_triggered,
-                'message': 'GitHub Action triggered successfully' if action_triggered else 'GitHub Action trigger failed'
+                'action_triggered': action_triggered
             })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -551,10 +574,10 @@ def api_get_action_status(change_id):
             return jsonify({'success': False, 'error': 'Change not found'}), 404
         
         if not change['github_action_run_id']:
-            return jsonify({'success': True, 'status': 'NO_ACTION', 'display': 'Not Triggered'})
+            return jsonify({'success': True, 'status': 'NOT_TRIGGERED'})
         
-        if not github_client:
-            return jsonify({'success': True, 'status': change['github_action_status'], 'display': change['github_action_status']})
+        if not github_client or not github_client.is_configured:
+            return jsonify({'success': True, 'status': change['github_action_status']})
         
         project = conn.execute('SELECT * FROM projects WHERE project_id = ?', (change['project_id'],)).fetchone()
         target_repo = project['target_repo_name']
@@ -580,12 +603,10 @@ def api_get_action_status(change_id):
             return jsonify({
                 'success': True,
                 'status': display_status,
-                'conclusion': conclusion,
-                'url': status_data.get('html_url'),
-                'display': display_status
+                'url': status_data.get('html_url')
             })
         
-        return jsonify({'success': True, 'status': change['github_action_status'], 'display': change['github_action_status']})
+        return jsonify({'success': True, 'status': change['github_action_status']})
 
 # ============================================================
 # RUN APP
@@ -598,7 +619,9 @@ if __name__ == '__main__':
     print("=" * 60)
     print(f"📡 Server running on port: {port}")
     print(f"🔑 GitHub configured: {bool(GITHUB_TOKEN)}")
-    print("=" * 60)
-    print("📋 Flow: Source Repo → PR → Approve → Merge → Trigger Action → Target Repo")
+    if GITHUB_TOKEN:
+        print(f"🔑 Token: {GITHUB_TOKEN[:10]}...{GITHUB_TOKEN[-4:]}")
+    else:
+        print("⚠️  WARNING: GITHUB_TOKEN not set!")
     print("=" * 60)
     app.run(host='0.0.0.0', port=port, debug=False)
