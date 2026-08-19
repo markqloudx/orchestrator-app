@@ -6,6 +6,7 @@
 <p class="muted">Project is the child of Cost Center. Repository integration is captured during project registration.</p>
 
 <button class="btn btn-red" onclick="openProjectModal()">+ Register Project</button>
+<button class="btn btn-green" onclick="refreshProjects()">🔄 Refresh</button>
 
 <br><br>
 
@@ -18,25 +19,37 @@
                 <th>Repository</th>
                 <th>Status</th>
                 <th>Branch</th>
-                <th>Running</th>
-                <th>Completed</th>
                 <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for p in projects %}
             <tr id="row-{{ p.project_id }}">
-                <td><strong>{{ p.project_id }}</strong><br><span class="muted">{{ p.name }}</span></td>
+                <td>
+                    <strong>{{ p.project_id }}</strong><br>
+                    <span class="muted">{{ p.name }}</span>
+                </td>
                 <td><strong>{{ p.cost_center_id }}</strong></td>
-                <td><strong>{{ p.provider }}</strong><br><span class="muted">{{ p.repository_name or '-' }}</span></td>
-                <td><span class="badge badge-{{ p.aws_status.lower() }}">{{ p.aws_status }}</span></td>
+                <td>
+                    <strong>{{ p.provider }}</strong><br>
+                    <span class="muted">{{ p.repository_name or p.repository_url or '-' }}</span>
+                </td>
+                <td>
+                    <span class="badge badge-{{ p.aws_status.lower() if p.aws_status else 'grey' }}" id="status-{{ p.project_id }}">
+                        {{ p.aws_status or 'PENDING' }}
+                    </span>
+                </td>
                 <td><code>{{ p.branch or 'main' }}</code></td>
-                <td>{{ p.running or 0 }}</td>
-                <td>{{ p.completed or 0 }}</td>
                 <td>
                     <button class="btn btn-small btn-green" onclick="verifyProject('{{ p.project_id }}')">Verify</button>
                     <button class="btn btn-small" onclick="detectChanges('{{ p.project_id }}')">Detect</button>
                     <button class="btn btn-small" onclick="deleteProject('{{ p.project_id }}')">🗑</button>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" style="text-align:center;color:#888;padding:30px;">
+                    No projects registered yet. Click "+ Register Project" to get started.
                 </td>
             </tr>
             {% endfor %}
@@ -46,7 +59,24 @@
 
 <script>
 // ============================================================
-// OPEN PROJECT MODAL - FIXED
+// REFRESH PROJECTS
+// ============================================================
+
+function refreshProjects() {
+    showToast('🔄 Refreshing...', 'info');
+    fetch('/api/projects')
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showToast('✅ Refreshed!', 'success');
+                location.reload();
+            }
+        })
+        .catch(err => showToast('❌ ' + err.message, 'error'));
+}
+
+// ============================================================
+// OPEN PROJECT MODAL
 // ============================================================
 
 function openProjectModal() {
@@ -155,13 +185,19 @@ function createProject() {
 function verifyProject(projectId) {
     showToast('🔍 Verifying project ' + projectId + '...', 'info');
     
+    const statusBadge = document.getElementById('status-' + projectId);
+    
     fetch('/api/projects/' + projectId + '/verify')
         .then(r => r.json())
         .then(data => {
             if (data.success) {
                 if (data.connected) {
+                    statusBadge.className = 'badge badge-ok';
+                    statusBadge.textContent = 'CONNECTED';
                     showToast('✅ Repository connected! Branches: ' + (data.branches || []).join(', '), 'success');
                 } else {
+                    statusBadge.className = 'badge badge-fail';
+                    statusBadge.textContent = 'NOT CONNECTED';
                     showToast('❌ Repository not connected or not found', 'error');
                 }
                 setTimeout(() => location.reload(), 1500);
@@ -190,10 +226,12 @@ function detectChanges(projectId) {
     .then(r => r.json())
     .then(data => {
         if (data.success && data.changes.length > 0) {
-            let msg = '✅ Detected ' + data.changes.length + ' changes:\n';
+            let msg = '✅ Detected ' + data.changes.length + ' changes:\n\n';
             data.changes.forEach(c => {
-                msg += '  - ' + c.file + ' (' + c.type + ')\n';
+                msg += '  📄 ' + c.file + ' (' + c.type + ')\n';
             });
+            msg += '\n🔗 DEV: ' + data.dev_repo + '\n';
+            msg += '🔗 PROD: ' + data.prod_repo + '\n';
             msg += '\nCreate change request?';
             
             if (confirm(msg)) {
