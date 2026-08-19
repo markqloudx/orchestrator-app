@@ -2,112 +2,16 @@
 
 {% block content %}
 
-<!-- ============================================================ -->
-<!-- EXECUTIVE VIEW - Dashboard                                     -->
-<!-- ============================================================ -->
+<h1>Project Registry</h1>
+<p class="muted">Project is the child of Cost Center. Repository integration is captured during project registration.</p>
 
-<h1>Change Management Control Center</h1>
-<p class="muted">Cost Center → Project → Repository → Change → Approval → Pipeline → Databricks</p>
-<div class="red-line"></div>
+<button class="btn btn-red" onclick="openProjectModal()">+ Register Project</button>
+<br><br>
 
-<!-- Metrics Cards -->
-<div class="grid grid-4">
-    <div class="card">
-        <div class="metric-label">Cost Centers</div>
-        <div class="metric-number blue" id="metricCostCenters">{{ cost_centers|length }}</div>
-    </div>
-    <div class="card">
-        <div class="metric-label">Projects</div>
-        <div class="metric-number blue" id="metricProjects">{{ projects|length }}</div>
-    </div>
-    <div class="card">
-        <div class="metric-label">Running Deployments</div>
-        <div class="metric-number orange" id="metricRunning">{{ running_count }}</div>
-    </div>
-    <div class="card">
-        <div class="metric-label">Approved Changes</div>
-        <div class="metric-number green" id="metricApproved">{{ approved_count }}</div>
-    </div>
-</div>
-
-<!-- End-to-End Flow Diagram -->
 <div class="card">
-    <h2>End-to-End Change Management</h2>
-    <div class="flow">
-        <div class="flow-node primary"><strong>Cost Center</strong>Business Parent</div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Project</strong>Child</div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Repository</strong>Git Source</div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node"><strong>Change</strong>Commit / Release</div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Approval</strong>Governance Gate</div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node"><strong>CI/CD Pipeline</strong>Build / Deploy</div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Databricks</strong>QA / PROD</div>
-    </div>
-</div>
-
-<!-- Two Column: Cost Centers + Current Deployment -->
-<div class="grid grid-2">
-
-    <!-- Cost Center Portfolio -->
-    <div class="card">
-        <h2>Cost Center Portfolio</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Cost Center</th>
-                    <th>Perspective</th>
-                    <th>Projects</th>
-                    <th>Running</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for cc in cost_centers %}
-                <tr>
-                    <td>
-                        <strong>{{ cc.cc_id }}</strong><br>
-                        <span class="muted">{{ cc.name }}</span>
-                    </td>
-                    <td>{{ cc.perspective }}</td>
-                    <td>{{ cc.project_count or 0 }}</td>
-                    <td>{{ cc.running_count or 0 }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-
-    <!-- Current Deployment -->
-    <div class="card">
-        <h2>Current Deployment</h2>
-        <div id="dashboardDeployment">
-            {% if active_deployment %}
-            <div class="notice">
-                <strong>{{ active_deployment.change_id }}</strong><br>
-                Project: {{ active_deployment.project_id }}<br>
-                Status: <span class="badge badge-running">{{ active_deployment.deployment_status }}</span>
-            </div>
-            {% else %}
-            <div class="notice">No active production deployment.</div>
-            {% endif %}
-        </div>
-    </div>
-
-</div>
-
-<!-- ============================================================ -->
-<!-- ALL PROJECTS TABLE (Executive View)                          -->
-<!-- ============================================================ -->
-
-<div class="card" style="margin-top:20px;">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
         <h2 style="margin:0;">📁 All Projects</h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-red" onclick="openProjectModal()">+ Register Project</button>
             <button class="btn btn-green" onclick="refreshAllProjects()">🔄 Refresh All</button>
         </div>
     </div>
@@ -126,7 +30,7 @@
                     <th>Actions</th>
                 </tr>
             </thead>
-            <tbody id="projectTableBody">
+            <tbody>
                 {% for p in projects %}
                 <tr id="project-row-{{ p.project_id }}">
                     <td>
@@ -169,54 +73,6 @@
     </div>
 </div>
 
-<!-- Recent Changes -->
-<div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
-        <h2 style="margin:0;">📋 Recent Changes</h2>
-        <button class="btn btn-outline" onclick="window.location.href='/changes'">View All</button>
-    </div>
-    <table>
-        <thead>
-            <tr>
-                <th>Change ID</th>
-                <th>Project</th>
-                <th>Commit</th>
-                <th>Approval</th>
-                <th>Status</th>
-                <th>Created</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for c in recent_changes %}
-            <tr>
-                <td><strong>{{ c.change_id }}</strong></td>
-                <td>{{ c.project_id }}</td>
-                <td><code>{{ c.commit_sha[:8] if c.commit_sha else '-' }}</code></td>
-                <td><span class="badge badge-{{ c.approval_status.lower() }}">{{ c.approval_status }}</span></td>
-                <td><span class="badge badge-{{ c.deployment_status.lower() }}">{{ c.deployment_status }}</span></td>
-                <td>{{ c.created_at[:16] if c.created_at else '-' }}</td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="6" style="text-align:center;color:#888;padding:20px;">No changes yet</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-
-<!-- Governance Principle -->
-<div class="card">
-    <h2>Governance Principle</h2>
-    <div class="notice">
-        <strong>Cost Center is the parent.</strong>
-        Every project must belong to a registered Cost Center.
-        Every project must have a registered source repository.
-        Every production change must have an approval.
-        Every deployment must carry project, repository, commit, release and metadata information.
-    </div>
-</div>
-
 <!-- ============================================================ -->
 <!-- SCRIPTS                                                       -->
 <!-- ============================================================ -->
@@ -246,7 +102,6 @@ function refreshAllProjects() {
 function verifyProject(projectId) {
     showToast('🔍 Verifying project ' + projectId + '...', 'info');
     
-    const row = document.getElementById('project-row-' + projectId);
     const statusBadge = document.getElementById('status-' + projectId);
     
     fetch('/api/projects/' + projectId + '/verify')
@@ -325,7 +180,7 @@ function detectChanges(projectId) {
                 });
             }
         } else if (data.success && data.changes.length === 0) {
-            showToast('✅ No changes detected between DEV and PROD for branch ' + (branch || 'main'), 'success');
+            showToast('✅ No changes detected for branch ' + (branch || 'main'), 'success');
         } else {
             showToast('❌ ' + (data.error || 'Unknown error'), 'error');
         }
@@ -461,32 +316,6 @@ function createProject() {
     })
     .catch(err => showToast('❌ Error: ' + err.message, 'error'));
 }
-
-// ============================================================
-// AUTO-REFRESH METRICS EVERY 30 SECONDS
-// ============================================================
-
-setInterval(() => {
-    // Refresh approved count
-    fetch('/api/changes?status=Approved')
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                document.getElementById('metricApproved').innerText = data.data.length;
-            }
-        });
-    
-    // Refresh running count
-    fetch('/api/projects')
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                const running = data.data.reduce((sum, p) => sum + (p.running || 0), 0);
-                document.getElementById('metricRunning').innerText = running;
-            }
-        });
-}, 30000);
-
 </script>
 
 {% endblock %}
