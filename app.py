@@ -15,7 +15,7 @@ app.secret_key = os.environ.get('SECRET_KEY', 'default-secret-key')
 # ============================================================
 
 # 🔑 PASTE YOUR TOKEN BETWEEN THE QUOTES
-GITHUB_TOKEN = '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'  # ← REPLACE THIS
+GITHUB_TOKEN = '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'  # ← REPLACE THIS
 
 # ============================================================
 # DEBUG - Print token info
