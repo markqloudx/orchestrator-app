@@ -3,48 +3,26 @@
 {% block content %}
 
 <h1>Live Deployment</h1>
-<p class="muted">Track your deployments</p>
+<p class="muted">Track your CI/CD pipeline</p>
 
 <br>
 
 <div class="card">
     <div style="padding:20px;text-align:center;">
         <div style="font-size:48px;margin-bottom:16px;">🚀</div>
-        <h2>CI/CD Pipeline Status</h2>
+        <h2>Pipeline Status</h2>
         <div style="display:flex;justify-content:center;gap:20px;margin:20px 0;flex-wrap:wrap;align-items:center;">
-            <div><span class="badge badge-ok">Source Repo</span></div>
+            <div><span class="badge badge-ok">GitHub</span></div>
             <span style="font-size:20px;">→</span>
-            <div><span class="badge badge-pending">Change</span></div>
+            <div><span class="badge badge-pending">PR</span></div>
             <span style="font-size:20px;">→</span>
             <div><span class="badge badge-approved">Approval</span></div>
             <span style="font-size:20px;">→</span>
             <div><span class="badge badge-merged">Merge</span></div>
             <span style="font-size:20px;">→</span>
-            <div><span class="badge badge-deployed">Deploy</span></div>
-        </div>
-    </div>
-</div>
-
-<br>
-
-<div class="card">
-    <h2>Pipeline Stages</h2>
-    <div style="display:flex;flex-direction:column;gap:10px;">
-        <div style="display:flex;align-items:center;gap:15px;padding:10px;background:#f8f9fa;border-radius:8px;">
-            <span class="badge badge-ok">1</span>
-            <span><strong>Create Change</strong> - Submit change request</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:15px;padding:10px;background:#f8f9fa;border-radius:8px;">
-            <span class="badge badge-approved">2</span>
-            <span><strong>Approve</strong> - Review and approve change</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:15px;padding:10px;background:#f8f9fa;border-radius:8px;">
-            <span class="badge badge-merged">3</span>
-            <span><strong>Merge</strong> - Merge to target branch</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:15px;padding:10px;background:#f8f9fa;border-radius:8px;">
-            <span class="badge badge-deployed">4</span>
-            <span><strong>Deploy</strong> - Deploy to PROD</span>
+            <div><span class="badge badge-deployed">PROD</span></div>
+            <span style="font-size:20px;">→</span>
+            <div><span class="badge badge-ok">Databricks</span></div>
         </div>
     </div>
 </div>

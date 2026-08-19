@@ -2,36 +2,50 @@
 
 {% block content %}
 
-<h1>Approval Workflow</h1>
-<p class="muted">Review and approve pending change requests</p>
+<h1>Project Registry</h1>
+<p class="muted">Register projects with GitHub repositories</p>
 
-<br>
+<button class="btn btn-red" onclick="openProjectModal()">+ Register Project</button>
+
+<br><br>
 
 <div class="card">
-    {% if changes %}
+    {% if projects %}
     <table>
         <thead>
             <tr>
-                <th>Change ID</th>
                 <th>Project</th>
-                <th>Title</th>
-                <th>Created</th>
+                <th>Repository</th>
+                <th>Branch</th>
+                <th>Status</th>
+                <th>PRs</th>
                 <th>Actions</th>
             </tr>
         </thead>
         <tbody>
-            {% for c in changes %}
+            {% for p in projects %}
             <tr>
-                <td><strong>{{ c.change_id }}</strong></td>
-                <td>{{ c.project_id }}</td>
-                <td>{{ c.title[:40] if c.title else '-' }}</td>
-                <td>{{ c.created_at[:16] if c.created_at else '-' }}</td>
                 <td>
-                    <button class="btn btn-small btn-green" onclick="approve('{{ c.change_id }}')">✅ Approve</button>
-                    <button class="btn btn-small" onclick="reject('{{ c.change_id }}')">❌ Reject</button>
-                    {% if c.conflict_message %}
-                    <span class="badge badge-conflict">⚠️ Conflict</span>
-                    {% endif %}
+                    <strong>{{ p.project_id }}</strong><br>
+                    <span class="muted">{{ p.name }}</span>
+                </td>
+                <td>
+                    <span class="muted">{{ p.repo_name or p.repo_url or '-' }}</span>
+                </td>
+                <td><code>{{ p.branch or 'main' }}</code></td>
+                <td>
+                    <span class="badge badge-{{ p.status.lower() if p.status else 'grey' }}">
+                        {{ p.status or 'PENDING' }}
+                    </span>
+                </td>
+                <td>
+                    {% set pr_count = changes|selectattr('project_id', 'equalto', p.project_id)|list|length %}
+                    {{ pr_count }}
+                </td>
+                <td>
+                    <button class="btn btn-small btn-green" onclick="verifyProject('{{ p.project_id }}')">Verify</button>
+                    <button class="btn btn-small" onclick="syncPRs('{{ p.project_id }}')">Sync PRs</button>
+                    <button class="btn btn-small" onclick="deleteProject('{{ p.project_id }}')">🗑</button>
                 </td>
             </tr>
             {% endfor %}
@@ -39,49 +53,122 @@
     </table>
     {% else %}
     <div style="text-align:center;padding:40px;color:#888;">
-        🎉 No pending approvals
+        No projects registered. Click "+ Register Project" to get started.
     </div>
     {% endif %}
 </div>
 
 <script>
-function approve(changeId) {
-    if (!confirm('Approve ' + changeId + '?')) return;
+function openProjectModal() {
+    const body = `
+        <div class="form-group">
+            <label>Project ID</label>
+            <input id="newProjectId" value="PRJ-${Math.floor(Math.random()*900+100)}">
+        </div>
+        <div class="form-group">
+            <label>Project Name</label>
+            <input id="newProjectName" placeholder="Enter project name">
+        </div>
+        <div class="form-group">
+            <label>GitHub Repository URL</label>
+            <input id="newRepoURL" placeholder="https://github.com/username/repo">
+        </div>
+        <div class="form-group">
+            <label>Branch</label>
+            <input id="newBranch" value="main">
+        </div>
+        <button class="btn btn-red" onclick="createProject()">Create</button>
+    `;
+    openModal('Register Project', body);
+}
+
+function createProject() {
+    const data = {
+        project_id: document.getElementById('newProjectId').value.trim(),
+        name: document.getElementById('newProjectName').value.trim(),
+        repo_url: document.getElementById('newRepoURL').value.trim(),
+        branch: document.getElementById('newBranch').value.trim()
+    };
     
-    fetch('/api/changes/' + changeId + '/approve', { method: 'POST' })
+    if (!data.project_id || !data.name || !data.repo_url) {
+        showToast('Please fill all required fields', 'error');
+        return;
+    }
+    
+    showToast('⏳ Creating project...', 'info');
+    
+    fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.success) {
+            showToast('✅ Project created! ' + result.prs_synced + ' PRs synced.', 'success');
+            closeModal();
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('❌ ' + result.error, 'error');
+        }
+    })
+    .catch(err => showToast('❌ Error: ' + err.message, 'error'));
+}
+
+function verifyProject(projectId) {
+    showToast('🔍 Verifying...', 'info');
+    
+    fetch('/api/projects/' + projectId + '/verify')
         .then(r => r.json())
         .then(data => {
             if (data.success) {
-                showToast('✅ Approved!', 'success');
+                let msg = '✅ Verification complete!\n\n';
+                msg += 'Repository: ' + (data.connected ? '✅ Connected' : '❌ Not Connected') + '\n';
+                msg += 'Status: ' + data.status + '\n';
+                msg += 'PRs Synced: ' + data.prs_synced;
+                alert(msg);
+                showToast('✅ Verified!', 'success');
                 setTimeout(() => location.reload(), 1000);
             } else {
-                if (data.conflict) {
-                    showToast('⚠️ ' + data.error, 'conflict');
-                } else {
-                    showToast('❌ ' + data.error, 'error');
-                }
+                showToast('❌ ' + data.error, 'error');
             }
-        });
+        })
+        .catch(err => showToast('❌ Error: ' + err.message, 'error'));
 }
 
-function reject(changeId) {
-    const reason = prompt('Reason for rejection:');
-    if (reason === null) return;
+function syncPRs(projectId) {
+    showToast('🔄 Syncing PRs...', 'info');
     
-    fetch('/api/changes/' + changeId + '/reject', {
+    fetch('/api/projects/' + projectId + '/sync-prs', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: reason || 'No reason' })
+        headers: { 'Content-Type': 'application/json' }
     })
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            showToast('❌ Rejected', 'error');
+            showToast('✅ Synced ' + data.synced + ' new PRs!', 'success');
             setTimeout(() => location.reload(), 1000);
         } else {
             showToast('❌ ' + data.error, 'error');
         }
-    });
+    })
+    .catch(err => showToast('❌ Error: ' + err.message, 'error'));
+}
+
+function deleteProject(projectId) {
+    if (!confirm('Delete project ' + projectId + '?')) return;
+    
+    fetch('/api/projects/' + projectId, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showToast('✅ Deleted', 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showToast('❌ ' + data.error, 'error');
+            }
+        })
+        .catch(err => showToast('❌ Error: ' + err.message, 'error'));
 }
 </script>
 

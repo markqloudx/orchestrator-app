@@ -3,63 +3,100 @@
 {% block content %}
 
 <h1>Change Register</h1>
-<p class="muted">Create and manage change requests</p>
+<p class="muted">All Pull Requests from the repository</p>
 
-<button class="btn btn-red" onclick="openChangeModal()">+ Create Change Request</button>
+<button class="btn btn-green" onclick="syncPRs()">🔄 Sync PRs from GitHub</button>
+<button class="btn btn-red" onclick="openChangeModal()">+ Manual Change</button>
 
 <br><br>
 
 <div class="card">
-    {% if changes %}
-    <table>
-        <thead>
-            <tr>
-                <th>Change ID</th>
-                <th>Project</th>
-                <th>Title</th>
-                <th>Status</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for c in changes %}
-            <tr>
-                <td><strong>{{ c.change_id }}</strong></td>
-                <td>{{ c.project_id }}</td>
-                <td>{{ c.title[:50] if c.title else '-' }}</td>
-                <td>
-                    <span class="badge badge-{{ c.approval_status.lower() }}">{{ c.approval_status }}</span>
-                    <span class="badge badge-{{ c.deployment_status.lower() }}">{{ c.deployment_status }}</span>
-                    {% if c.conflict_message %}
-                    <span class="badge badge-conflict">⚠️ Conflict</span>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if c.approval_status == 'PENDING' %}
-                    <button class="btn btn-small btn-green" onclick="approveChange('{{ c.change_id }}')">Approve</button>
-                    <button class="btn btn-small" onclick="rejectChange('{{ c.change_id }}')">Reject</button>
-                    {% elif c.approval_status == 'APPROVED' and c.deployment_status != 'MERGED' %}
-                    <button class="btn btn-small btn-red" onclick="mergeChange('{{ c.change_id }}')">Merge</button>
-                    {% elif c.deployment_status == 'MERGED' and c.deployment_status != 'DEPLOYED' %}
-                    <button class="btn btn-small" onclick="deployChange('{{ c.change_id }}')">Deploy to DB</button>
-                    {% elif c.deployment_status == 'DEPLOYED' %}
-                    <span class="badge badge-ok">✅ Deployed</span>
-                    {% elif c.approval_status == 'REJECTED' %}
-                    <span class="badge badge-fail">Rejected</span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <div style="text-align:center;padding:40px;color:#888;">
-        No changes yet. Create a change request.
+    <div style="overflow-x:auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Change ID</th>
+                    <th>Project</th>
+                    <th>PR #</th>
+                    <th>Title</th>
+                    <th>Author</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in changes %}
+                <tr>
+                    <td><strong>{{ c.change_id }}</strong></td>
+                    <td>{{ c.project_id }}</td>
+                    <td>
+                        {% if c.pr_number %}
+                        <a href="{{ c.pr_url }}" target="_blank">#{{ c.pr_number }}</a>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td>{{ c.pr_title or c.title or '-' }}</td>
+                    <td>{{ c.pr_author or '-' }}</td>
+                    <td>
+                        <span class="badge badge-{{ c.approval_status.lower() }}">{{ c.approval_status }}</span>
+                        <span class="badge badge-{{ c.deployment_status.lower() }}">{{ c.deployment_status }}</span>
+                        {% if c.conflict_message %}
+                        <span class="badge badge-conflict">⚠️ Conflict</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if c.approval_status == 'PENDING' %}
+                        <button class="btn btn-small btn-green" onclick="approveChange('{{ c.change_id }}')">Approve</button>
+                        <button class="btn btn-small" onclick="rejectChange('{{ c.change_id }}')">Reject</button>
+                        {% elif c.approval_status == 'APPROVED' and c.deployment_status != 'MERGED' %}
+                        <button class="btn btn-small btn-red" onclick="mergeChange('{{ c.change_id }}')">Merge</button>
+                        {% elif c.deployment_status == 'MERGED' and c.deployment_status != 'DEPLOYED' %}
+                        <button class="btn btn-small" onclick="deployChange('{{ c.change_id }}')">Deploy</button>
+                        {% elif c.deployment_status == 'DEPLOYED' %}
+                        <span class="badge badge-ok">✅ Deployed</span>
+                        {% elif c.approval_status == 'REJECTED' %}
+                        <span class="badge badge-fail">Rejected</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
-    {% endif %}
 </div>
 
 <script>
+// ============================================================
+// SYNC PRs FROM GITHUB
+// ============================================================
+
+function syncPRs() {
+    const projectId = prompt('Enter Project ID to sync PRs (e.g., PRJ-001):');
+    if (!projectId) return;
+    
+    showToast('🔄 Syncing PRs from GitHub...', 'info');
+    
+    fetch('/api/projects/' + projectId + '/sync-prs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('✅ Synced ' + data.synced + ' new PRs!', 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('❌ ' + data.error, 'error');
+        }
+    })
+    .catch(err => showToast('❌ Error: ' + err.message, 'error'));
+}
+
+// ============================================================
+// OPEN CHANGE MODAL
+// ============================================================
+
 function openChangeModal() {
     const projects = {{ projects|tojson }};
     const options = projects.map(p => 
@@ -128,11 +165,7 @@ function createChange() {
     .then(r => r.json())
     .then(result => {
         if (result.success) {
-            if (result.data.conflict_message) {
-                showToast('⚠️ ' + result.data.conflict_message, 'conflict');
-            } else {
-                showToast('✅ Change ' + result.data.change_id + ' created!', 'success');
-            }
+            showToast('✅ Change ' + result.data.change_id + ' created!', 'success');
             closeModal();
             setTimeout(() => location.reload(), 1500);
         } else {
@@ -141,6 +174,10 @@ function createChange() {
     })
     .catch(err => showToast('❌ Error: ' + err.message, 'error'));
 }
+
+// ============================================================
+// APPROVAL ACTIONS
+// ============================================================
 
 function approveChange(changeId) {
     if (!confirm('Approve change ' + changeId + '?')) return;

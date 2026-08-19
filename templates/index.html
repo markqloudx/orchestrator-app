@@ -3,7 +3,7 @@
 {% block content %}
 
 <h1>Change Management Control Center</h1>
-<p class="muted">Source Repository → Change Request → Approval → Merge → Target Repository → Deploy → PROD</p>
+<p class="muted">GitHub Repository → PR → Approval → Merge → PROD → Deploy</p>
 <div class="red-line"></div>
 
 <div class="grid grid-4">
@@ -12,7 +12,7 @@
         <div class="metric-number blue">{{ projects|length }}</div>
     </div>
     <div class="card">
-        <div class="metric-label">Pending Changes</div>
+        <div class="metric-label">Pending PRs</div>
         <div class="metric-number orange">{{ pending_count }}</div>
     </div>
     <div class="card">
@@ -28,17 +28,17 @@
 <br>
 
 <div class="card">
-    <h2>End-to-End Change Management Flow</h2>
+    <h2>End-to-End Flow</h2>
     <div class="flow">
-        <div class="flow-node primary"><strong>Source Repo</strong>Origin</div>
+        <div class="flow-node primary"><strong>GitHub</strong>Repository</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node"><strong>Change</strong>Request</div>
+        <div class="flow-node"><strong>PR</strong>Detected</div>
         <div class="flow-arrow">→</div>
         <div class="flow-node primary"><strong>Approval</strong>Gate</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node"><strong>Merge</strong>to Target</div>
+        <div class="flow-node"><strong>Merge</strong>to PROD</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Deploy</strong>to PROD</div>
+        <div class="flow-node primary"><strong>Databricks</strong>Deploy</div>
     </div>
 </div>
 
@@ -46,64 +46,40 @@
 
 <div class="grid grid-2">
     <div class="card">
-        <h2>System Status</h2>
+        <h2>Quick Actions</h2>
         <div style="display:flex;flex-direction:column;gap:8px;">
-            <div><span class="badge badge-ok">✅ App Status</span> <span style="font-size:12px;color:#666;margin-left:8px;">Running</span></div>
-            <div><span class="badge badge-ok">✅ Database</span> <span style="font-size:12px;color:#666;margin-left:8px;">Connected</span></div>
-            <div><span class="badge badge-{% if projects %}ok{% else %}grey{% endif %}">📁 Projects</span> <span style="font-size:12px;color:#666;margin-left:8px;">{{ projects|length }} registered</span></div>
+            <button class="btn btn-red" onclick="window.location.href='/projects'">📁 Manage Projects</button>
+            <button class="btn btn-green" onclick="window.location.href='/changes'">📋 View PRs</button>
+            <button class="btn" onclick="window.location.href='/approvals'">✅ Approvals</button>
         </div>
     </div>
 
     <div class="card">
-        <h2>Quick Actions</h2>
-        <div style="display:flex;flex-direction:column;gap:8px;">
-            <button class="btn btn-red" onclick="window.location.href='/projects'">📁 Manage Projects</button>
-            <button class="btn btn-green" onclick="window.location.href='/changes'">📋 Create Change</button>
-            <button class="btn" onclick="window.location.href='/approvals'">✅ Approvals</button>
-        </div>
+        <h2>Recent Activity</h2>
+        {% if changes %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Change</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in changes %}
+                <tr>
+                    <td>{{ c.change_id }}</td>
+                    <td>
+                        <span class="badge badge-{{ c.approval_status.lower() }}">{{ c.approval_status }}</span>
+                        <span class="badge badge-{{ c.deployment_status.lower() }}">{{ c.deployment_status }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="text-align:center;padding:20px;color:#888;">No activity yet</div>
+        {% endif %}
     </div>
-</div>
-
-<br>
-
-<div class="card">
-    <h2>Recent Changes</h2>
-    {% if changes %}
-    <table>
-        <thead>
-            <tr>
-                <th>Change ID</th>
-                <th>Project</th>
-                <th>Title</th>
-                <th>Status</th>
-                <th>Created</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for c in changes %}
-            <tr>
-                <td><strong>{{ c.change_id }}</strong></td>
-                <td>{{ c.project_id }}</td>
-                <td>{{ c.title[:50] if c.title else '-' }}</td>
-                <td>
-                    <span class="badge badge-{{ c.approval_status.lower() }}">{{ c.approval_status }}</span>
-                    {% if c.deployment_status == 'DEPLOYED' %}
-                    <span class="badge badge-ok">✅ Deployed</span>
-                    {% elif c.deployment_status == 'MERGED' %}
-                    <span class="badge badge-ok">✅ Merged</span>
-                    {% endif %}
-                    {% if c.conflict_message %}
-                    <span class="badge badge-conflict">⚠️ Conflict</span>
-                    {% endif %}
-                </td>
-                <td>{{ c.created_at[:16] if c.created_at else '-' }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <div style="text-align:center;padding:30px;color:#888;">No changes yet. Create a change request.</div>
-    {% endif %}
 </div>
 
 {% endblock %}
