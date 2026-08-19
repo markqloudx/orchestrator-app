@@ -28,7 +28,6 @@ h2{margin:0 0 10px;font-size:18px;}
 
 .grid{display:grid;gap:15px;}
 .grid-4{grid-template-columns:repeat(4,1fr);}
-.grid-3{grid-template-columns:repeat(3,1fr);}
 .grid-2{grid-template-columns:repeat(2,1fr);}
 
 .card{background:#fff;border:1px solid #ddd;border-radius:10px;padding:18px;}
@@ -53,7 +52,6 @@ td{font-size:12px;padding:11px;border-bottom:1px solid #eee;vertical-align:middl
 
 .badge{display:inline-block;padding:4px 8px;border-radius:20px;font-size:10px;font-weight:bold;}
 .badge-ok{background:#e6f6ec;color:#167342;}
-.badge-running{background:#e9f0ff;color:#315da8;}
 .badge-pending{background:#fff3d5;color:#875d00;}
 .badge-fail{background:#fdebed;color:#b3131a;}
 .badge-grey{background:#eee;color:#666;}
@@ -61,6 +59,7 @@ td{font-size:12px;padding:11px;border-bottom:1px solid #eee;vertical-align:middl
 .badge-deployed{background:#cce5ff;color:#004085;}
 .badge-merged{background:#cce5ff;color:#004085;}
 .badge-rejected{background:#fdebed;color:#b3131a;}
+.badge-conflict{background:#fdebed;color:#b3131a;}
 
 .flow{display:flex;align-items:center;gap:7px;overflow-x:auto;padding:18px 3px;}
 .flow-node{min-width:125px;padding:14px 9px;text-align:center;border:1px solid #ccc;border-radius:8px;background:#fff;font-size:11px;}
@@ -69,6 +68,7 @@ td{font-size:12px;padding:11px;border-bottom:1px solid #eee;vertical-align:middl
 .flow-arrow{color:#aaa;font-weight:bold;}
 
 .notice{background:#fff5f5;border-left:4px solid #d71920;padding:13px;border-radius:5px;font-size:12px;}
+.notice-success{background:#e6f6ec;border-left-color:#16834b;}
 
 .form-group{margin-bottom:12px;}
 .form-group label{display:block;font-size:11px;font-weight:bold;color:#555;margin-bottom:5px;}
@@ -84,9 +84,10 @@ textarea{min-height:80px;}
 .toast.show{display:block;}
 .toast.success{border-left-color:#16834b;}
 .toast.error{border-left-color:#d71920;}
+.toast.conflict{border-left-color:#e67e22;}
 
-@media(max-width:950px){.grid-4{grid-template-columns:repeat(2,1fr);}.grid-3{grid-template-columns:repeat(2,1fr);}aside{width:190px;}}
-@media(max-width:650px){.layout{display:block;}aside{width:100%;border-right:0;border-bottom:1px solid #ddd;}.grid-4,.grid-3,.grid-2{grid-template-columns:1fr;}main{padding:15px;}}
+@media(max-width:950px){.grid-4{grid-template-columns:repeat(2,1fr);}aside{width:190px;}}
+@media(max-width:650px){.layout{display:block;}aside{width:100%;border-right:0;border-bottom:1px solid #ddd;}.grid-4,.grid-2{grid-template-columns:1fr;}main{padding:15px;}}
 </style>
 </head>
 
@@ -103,17 +104,10 @@ textarea{min-height:80px;}
     <div class="nav-title">Governance</div>
     <nav>
         <button onclick="location.href='/'">Executive Flow</button>
-        <button onclick="location.href='/cost-centers'">Cost Centers</button>
         <button onclick="location.href='/projects'">Projects</button>
         <button onclick="location.href='/changes'">Change Register</button>
+        <button onclick="location.href='/approvals'">Approvals</button>
         <button onclick="location.href='/deployment'">Live Deployment</button>
-        <button onclick="location.href='/audit'">End-to-End Audit</button>
-    </nav>
-    <div class="nav-title">Technical Reference</div>
-    <nav>
-        <button onclick="location.href='/repository'">Repository Control</button>
-        <button onclick="location.href='/metadata'">Metadata / YAML</button>
-        <button onclick="location.href='/swagger'">📚 API Docs</button>
     </nav>
 </aside>
 
@@ -146,7 +140,7 @@ function showToast(message, type) {
     const toast = document.getElementById('toast');
     toast.innerText = message;
     toast.className = 'toast show ' + (type || '');
-    setTimeout(() => toast.className = 'toast', 4000);
+    setTimeout(() => toast.className = 'toast', 5000);
 }
 
 function openModal(title, body) {

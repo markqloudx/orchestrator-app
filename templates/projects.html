@@ -3,88 +3,57 @@
 {% block content %}
 
 <h1>Project Registry</h1>
-<p class="muted">Project is the child of Cost Center. Repository integration is captured during project registration.</p>
+<p class="muted">Register projects with Source and Target repositories</p>
 
 <button class="btn btn-red" onclick="openProjectModal()">+ Register Project</button>
-<button class="btn btn-green" onclick="refreshProjects()">🔄 Refresh</button>
 
 <br><br>
 
 <div class="card">
+    {% if projects %}
     <table>
         <thead>
             <tr>
                 <th>Project</th>
-                <th>Cost Center</th>
-                <th>Repository</th>
-                <th>Status</th>
+                <th>Source Repo</th>
+                <th>Target Repo</th>
                 <th>Branch</th>
+                <th>Status</th>
                 <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for p in projects %}
-            <tr id="row-{{ p.project_id }}">
+            <tr>
                 <td>
                     <strong>{{ p.project_id }}</strong><br>
                     <span class="muted">{{ p.name }}</span>
                 </td>
-                <td><strong>{{ p.cost_center_id }}</strong></td>
-                <td>
-                    <strong>{{ p.provider }}</strong><br>
-                    <span class="muted">{{ p.repository_name or p.repository_url or '-' }}</span>
-                </td>
-                <td>
-                    <span class="badge badge-{{ p.aws_status.lower() if p.aws_status else 'grey' }}" id="status-{{ p.project_id }}">
-                        {{ p.aws_status or 'PENDING' }}
-                    </span>
-                </td>
+                <td><span class="muted">{{ p.source_repo_name or p.source_repo_url or '-' }}</span></td>
+                <td><span class="muted">{{ p.target_repo_name or p.target_repo_url or '-' }}</span></td>
                 <td><code>{{ p.branch or 'main' }}</code></td>
                 <td>
-                    <button class="btn btn-small btn-green" onclick="verifyProject('{{ p.project_id }}')">Verify</button>
-                    <button class="btn btn-small" onclick="detectChanges('{{ p.project_id }}')">Detect</button>
-                    <button class="btn btn-small" onclick="deleteProject('{{ p.project_id }}')">🗑</button>
+                    <span class="badge badge-{{ p.status.lower() if p.status else 'grey' }}">
+                        {{ p.status or 'PENDING' }}
+                    </span>
                 </td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="6" style="text-align:center;color:#888;padding:30px;">
-                    No projects registered yet. Click "+ Register Project" to get started.
+                <td>
+                    <button class="btn btn-small btn-green" onclick="verifyProject('{{ p.project_id }}')">Verify</button>
+                    <button class="btn btn-small" onclick="deleteProject('{{ p.project_id }}')">🗑</button>
                 </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+    {% else %}
+    <div style="text-align:center;padding:40px;color:#888;">
+        No projects registered. Click "+ Register Project" to get started.
+    </div>
+    {% endif %}
 </div>
 
 <script>
-// ============================================================
-// REFRESH PROJECTS
-// ============================================================
-
-function refreshProjects() {
-    showToast('🔄 Refreshing...', 'info');
-    fetch('/api/projects')
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                showToast('✅ Refreshed!', 'success');
-                location.reload();
-            }
-        })
-        .catch(err => showToast('❌ ' + err.message, 'error'));
-}
-
-// ============================================================
-// OPEN PROJECT MODAL
-// ============================================================
-
 function openProjectModal() {
-    const costCenters = {{ cost_centers|tojson }};
-    const options = costCenters.map(c => 
-        `<option value="${c.cc_id}">${c.cc_id} — ${c.name}</option>`
-    ).join('');
-    
     const body = `
         <div class="form-group">
             <label>Project ID</label>
@@ -95,70 +64,52 @@ function openProjectModal() {
             <input id="newProjectName" placeholder="Enter project name">
         </div>
         <div class="form-group">
-            <label>Cost Center Parent</label>
-            <select id="newProjectCC">${options}</select>
+            <label>Source Repository URL</label>
+            <input id="newSourceRepo" placeholder="https://github.com/username/source-repo">
         </div>
         <div class="form-group">
-            <label>Repository Provider</label>
-            <select id="newProvider">
-                <option>GitHub</option>
-                <option>Bitbucket</option>
-                <option>AWS CodeCommit</option>
-            </select>
+            <label>Source Repository Name</label>
+            <input id="newSourceRepoName" placeholder="source-repo">
         </div>
         <div class="form-group">
-            <label>Repository URL</label>
-            <input id="newRepoURL" placeholder="https://github.com/username/repo">
+            <label>Target Repository URL</label>
+            <input id="newTargetRepo" placeholder="https://github.com/username/target-repo">
         </div>
         <div class="form-group">
-            <label>Repository Name</label>
-            <input id="newRepoName" placeholder="repo-name">
+            <label>Target Repository Name</label>
+            <input id="newTargetRepoName" placeholder="target-repo">
         </div>
         <div class="form-group">
             <label>Branch</label>
             <input id="newBranch" value="main">
         </div>
         <div class="form-group">
-            <label>Repository Status</label>
-            <select id="newAWSStatus">
-                <option value="CONNECTED">Connected</option>
-                <option value="PENDING" selected>Pending</option>
-                <option value="NOT CONNECTED">Not Connected</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>AWS Connection Name</label>
-            <input id="newAWSConnection" placeholder="project-github-connection">
+            <label>PROD Branch</label>
+            <input id="newProdBranch" value="main">
         </div>
         <button class="btn btn-red" onclick="createProject()">Create</button>
     `;
-    
     openModal('Register Project', body);
 }
-
-// ============================================================
-// CREATE PROJECT
-// ============================================================
 
 function createProject() {
     const data = {
         project_id: document.getElementById('newProjectId').value.trim(),
         name: document.getElementById('newProjectName').value.trim(),
-        cost_center_id: document.getElementById('newProjectCC').value,
-        provider: document.getElementById('newProvider').value,
-        repository_url: document.getElementById('newRepoURL').value.trim(),
-        repository_name: document.getElementById('newRepoName').value.trim(),
+        source_repo_url: document.getElementById('newSourceRepo').value.trim(),
+        source_repo_name: document.getElementById('newSourceRepoName').value.trim(),
+        target_repo_url: document.getElementById('newTargetRepo').value.trim(),
+        target_repo_name: document.getElementById('newTargetRepoName').value.trim(),
         branch: document.getElementById('newBranch').value.trim(),
-        aws_status: document.getElementById('newAWSStatus').value,
-        aws_connection: document.getElementById('newAWSConnection').value.trim()
+        prod_branch: document.getElementById('newProdBranch').value.trim()
     };
     
-    if (!data.project_id || !data.name || !data.repository_url) {
+    if (!data.project_id || !data.name || !data.source_repo_url || !data.target_repo_url) {
         showToast('Please fill all required fields', 'error');
         return;
     }
     
-    showToast('⏳ Registering project...', 'info');
+    showToast('⏳ Creating project...', 'info');
     
     fetch('/api/projects', {
         method: 'POST',
@@ -168,7 +119,7 @@ function createProject() {
     .then(r => r.json())
     .then(result => {
         if (result.success) {
-            showToast('✅ Project registered!', 'success');
+            showToast('✅ Project created!', 'success');
             closeModal();
             setTimeout(() => location.reload(), 1500);
         } else {
@@ -178,119 +129,41 @@ function createProject() {
     .catch(err => showToast('❌ Error: ' + err.message, 'error'));
 }
 
-// ============================================================
-// VERIFY PROJECT
-// ============================================================
-
 function verifyProject(projectId) {
-    showToast('🔍 Verifying project ' + projectId + '...', 'info');
-    
-    const statusBadge = document.getElementById('status-' + projectId);
+    showToast('🔍 Verifying repositories...', 'info');
     
     fetch('/api/projects/' + projectId + '/verify')
         .then(r => r.json())
         .then(data => {
             if (data.success) {
-                if (data.connected) {
-                    statusBadge.className = 'badge badge-ok';
-                    statusBadge.textContent = 'CONNECTED';
-                    showToast('✅ Repository connected! Branches: ' + (data.branches || []).join(', '), 'success');
-                } else {
-                    statusBadge.className = 'badge badge-fail';
-                    statusBadge.textContent = 'NOT CONNECTED';
-                    showToast('❌ Repository not connected or not found', 'error');
-                }
-                setTimeout(() => location.reload(), 1500);
+                let msg = '✅ Verification complete!\n\n';
+                msg += 'Source Repo: ' + (data.source_valid ? '✅ Valid' : '❌ Invalid') + '\n';
+                msg += 'Target Repo: ' + (data.target_valid ? '✅ Valid' : '❌ Invalid') + '\n';
+                msg += 'Status: ' + data.status;
+                alert(msg);
+                showToast('✅ Verified!', 'success');
+                setTimeout(() => location.reload(), 1000);
             } else {
-                showToast('❌ Error: ' + data.error, 'error');
+                showToast('❌ ' + data.error, 'error');
             }
         })
         .catch(err => showToast('❌ Error: ' + err.message, 'error'));
 }
 
-// ============================================================
-// DETECT CHANGES
-// ============================================================
-
-function detectChanges(projectId) {
-    const branch = prompt('Enter branch name:', 'main');
-    if (branch === null) return;
-    
-    showToast('🔍 Detecting changes...', 'info');
-    
-    fetch('/api/detect-changes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: projectId, branch: branch || 'main' })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success && data.changes.length > 0) {
-            let msg = '✅ Detected ' + data.changes.length + ' changes:\n\n';
-            data.changes.forEach(c => {
-                msg += '  📄 ' + c.file + ' (' + c.type + ')\n';
-            });
-            msg += '\n🔗 DEV: ' + data.dev_repo + '\n';
-            msg += '🔗 PROD: ' + data.prod_repo + '\n';
-            msg += '\nCreate change request?';
-            
-            if (confirm(msg)) {
-                const files = data.changes.map(c => ({ file: c.file, type: c.type }));
-                const commit = data.commits && data.commits[0] ? data.commits[0].sha : 'auto-detected';
-                
-                fetch('/api/changes', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        project_id: projectId,
-                        commit_sha: commit,
-                        release_version: 'v1.0.' + Math.floor(Math.random() * 1000 + 100),
-                        description: 'Auto-detected ' + data.changes.length + ' changes',
-                        files_changed: files,
-                        branch: branch || 'main'
-                    })
-                })
-                .then(r => r.json())
-                .then(result => {
-                    if (result.success) {
-                        showToast('✅ Change ' + result.data.change_id + ' created!', 'success');
-                        setTimeout(() => location.reload(), 1500);
-                    } else {
-                        showToast('❌ ' + result.error, 'error');
-                    }
-                });
-            }
-        } else if (data.success && data.changes.length === 0) {
-            showToast('✅ No changes detected', 'success');
-        } else {
-            showToast('❌ ' + (data.error || 'Unknown error'), 'error');
-        }
-    })
-    .catch(err => showToast('❌ Error: ' + err.message, 'error'));
-}
-
-// ============================================================
-// DELETE PROJECT
-// ============================================================
-
 function deleteProject(projectId) {
-    if (!confirm('⚠️ Delete project ' + projectId + '?')) return;
+    if (!confirm('Delete project ' + projectId + '?')) return;
     
-    showToast('⏳ Deleting project...', 'info');
-    
-    fetch('/api/projects/' + projectId, {
-        method: 'DELETE'
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            showToast('✅ Project deleted', 'success');
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            showToast('❌ ' + data.error, 'error');
-        }
-    })
-    .catch(err => showToast('❌ Error: ' + err.message, 'error'));
+    fetch('/api/projects/' + projectId, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showToast('✅ Deleted', 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showToast('❌ ' + data.error, 'error');
+            }
+        })
+        .catch(err => showToast('❌ Error: ' + err.message, 'error'));
 }
 </script>
 

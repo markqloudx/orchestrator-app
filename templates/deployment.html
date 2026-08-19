@@ -2,65 +2,51 @@
 
 {% block content %}
 
-<h1>Live Deployment Control</h1>
-<p class="muted">Visual representation of the project-specific deployment lifecycle.</p>
-
-<div class="card">
-    <div class="deployment-header">
-        <div>
-            <div class="muted">ACTIVE DEPLOYMENT</div>
-            <h2 id="deploymentTitle">No deployment running</h2>
-        </div>
-        <div id="deploymentStatus"><span class="badge badge-grey">IDLE</span></div>
-    </div>
-    <div class="red-line"></div>
-
-    <div class="deployment-flow">
-        <div class="deploy-step" id="step0"><div class="deploy-circle">✓</div><div class="deploy-title">Change Approved</div><div class="deploy-detail">Governance Gate</div></div>
-        <div class="deploy-connector" id="connector0"></div>
-        <div class="deploy-step" id="step1"><div class="deploy-circle">1</div><div class="deploy-title">Bundle Validation</div><div class="deploy-detail">databricks.yml</div></div>
-        <div class="deploy-connector" id="connector1"></div>
-        <div class="deploy-step" id="step2"><div class="deploy-circle">2</div><div class="deploy-title">Bundle Build</div><div class="deploy-detail">Artifact</div></div>
-        <div class="deploy-connector" id="connector2"></div>
-        <div class="deploy-step" id="step3"><div class="deploy-circle">3</div><div class="deploy-title">CI/CD Pipeline</div><div class="deploy-detail">Deploy</div></div>
-        <div class="deploy-connector" id="connector3"></div>
-        <div class="deploy-step" id="step4"><div class="deploy-circle">4</div><div class="deploy-title">Databricks Validation</div><div class="deploy-detail">Workspace</div></div>
-        <div class="deploy-connector" id="connector4"></div>
-        <div class="deploy-step" id="step5"><div class="deploy-circle">5</div><div class="deploy-title">Deploying</div><div class="deploy-detail">Production</div></div>
-        <div class="deploy-connector" id="connector5"></div>
-        <div class="deploy-step" id="step6"><div class="deploy-circle">✓</div><div class="deploy-title">Complete</div><div class="deploy-detail">Release Live</div></div>
-    </div>
-
-    <div class="current-state">
-        <div class="current-icon" id="currentIcon">●</div>
-        <div>
-            <div class="muted">CURRENT STATE</div>
-            <h2 id="currentStage">Waiting for deployment</h2>
-            <div id="currentDescription">Select an approved change from the Change Register.</div>
-        </div>
-    </div>
-    <br>
-    <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:bold">
-        <span>Deployment Progress</span>
-        <span id="progressText">0%</span>
-    </div>
-    <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
-</div>
+<h1>Live Deployment</h1>
+<p class="muted">Track your deployments</p>
 
 <br>
 
-<div class="grid grid-4">
-    <div class="card"><div class="metric-label">Change ID</div><div class="metric-number" id="deploymentChange">—</div></div>
-    <div class="card"><div class="metric-label">Commit</div><div class="metric-number" id="deploymentCommit">—</div></div>
-    <div class="card"><div class="metric-label">Bundle</div><div class="metric-number" id="deploymentBundle">—</div></div>
-    <div class="card"><div class="metric-label">Environment</div><div class="metric-number">PROD</div></div>
+<div class="card">
+    <div style="padding:20px;text-align:center;">
+        <div style="font-size:48px;margin-bottom:16px;">🚀</div>
+        <h2>CI/CD Pipeline Status</h2>
+        <div style="display:flex;justify-content:center;gap:20px;margin:20px 0;flex-wrap:wrap;align-items:center;">
+            <div><span class="badge badge-ok">Source Repo</span></div>
+            <span style="font-size:20px;">→</span>
+            <div><span class="badge badge-pending">Change</span></div>
+            <span style="font-size:20px;">→</span>
+            <div><span class="badge badge-approved">Approval</span></div>
+            <span style="font-size:20px;">→</span>
+            <div><span class="badge badge-merged">Merge</span></div>
+            <span style="font-size:20px;">→</span>
+            <div><span class="badge badge-deployed">Deploy</span></div>
+        </div>
+    </div>
 </div>
 
 <br>
 
 <div class="card">
-    <h2>Live Deployment Log</h2>
-    <div class="log" id="deploymentLog"><span style="color:#777;">Waiting for deployment...</span></div>
+    <h2>Pipeline Stages</h2>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;gap:15px;padding:10px;background:#f8f9fa;border-radius:8px;">
+            <span class="badge badge-ok">1</span>
+            <span><strong>Create Change</strong> - Submit change request</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:15px;padding:10px;background:#f8f9fa;border-radius:8px;">
+            <span class="badge badge-approved">2</span>
+            <span><strong>Approve</strong> - Review and approve change</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:15px;padding:10px;background:#f8f9fa;border-radius:8px;">
+            <span class="badge badge-merged">3</span>
+            <span><strong>Merge</strong> - Merge to target branch</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:15px;padding:10px;background:#f8f9fa;border-radius:8px;">
+            <span class="badge badge-deployed">4</span>
+            <span><strong>Deploy</strong> - Deploy to PROD</span>
+        </div>
+    </div>
 </div>
 
 {% endblock %}

@@ -3,44 +3,42 @@
 {% block content %}
 
 <h1>Change Management Control Center</h1>
-<p class="muted">DEV Repository → PR → Approval → Merge → PROD Repository → Deploy → Databricks</p>
+<p class="muted">Source Repository → Change Request → Approval → Merge → Target Repository → Deploy → PROD</p>
 <div class="red-line"></div>
 
 <div class="grid grid-4">
-    <div class="card">
-        <div class="metric-label">Cost Centers</div>
-        <div class="metric-number blue">{{ cost_centers|length }}</div>
-    </div>
     <div class="card">
         <div class="metric-label">Projects</div>
         <div class="metric-number blue">{{ projects|length }}</div>
     </div>
     <div class="card">
-        <div class="metric-label">Pending PRs</div>
+        <div class="metric-label">Pending Changes</div>
         <div class="metric-number orange">{{ pending_count }}</div>
     </div>
     <div class="card">
-        <div class="metric-label">Deployed to DB</div>
-        <div class="metric-number green">{{ deployed_count }}</div>
+        <div class="metric-label">Approved</div>
+        <div class="metric-number green">{{ approved_count }}</div>
+    </div>
+    <div class="card">
+        <div class="metric-label">Deployed</div>
+        <div class="metric-number red">{{ deployed_count }}</div>
     </div>
 </div>
 
 <br>
 
 <div class="card">
-    <h2>End-to-End Flow</h2>
+    <h2>End-to-End Change Management Flow</h2>
     <div class="flow">
-        <div class="flow-node primary"><strong>DEV Repo</strong>Source</div>
+        <div class="flow-node primary"><strong>Source Repo</strong>Origin</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node"><strong>PR</strong>Pull Request</div>
+        <div class="flow-node"><strong>Change</strong>Request</div>
         <div class="flow-arrow">→</div>
         <div class="flow-node primary"><strong>Approval</strong>Gate</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node"><strong>Merge</strong>to PROD</div>
+        <div class="flow-node"><strong>Merge</strong>to Target</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>PROD Repo</strong>Target</div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Databricks</strong>Deploy</div>
+        <div class="flow-node primary"><strong>Deploy</strong>to PROD</div>
     </div>
 </div>
 
@@ -48,24 +46,11 @@
 
 <div class="grid grid-2">
     <div class="card">
-        <h2>GitHub Status</h2>
+        <h2>System Status</h2>
         <div style="display:flex;flex-direction:column;gap:8px;">
-            <div>
-                <span class="badge {% if github_dev %}badge-ok{% else %}badge-grey{% endif %}">
-                    {% if github_dev %}✅{% else %}❌{% endif %} DEV Repo
-                </span>
-                <span style="font-size:12px;color:#666;margin-left:8px;">{{ github_dev or 'Not Configured' }}</span>
-            </div>
-            <div>
-                <span class="badge {% if github_prod %}badge-ok{% else %}badge-grey{% endif %}">
-                    {% if github_prod %}✅{% else %}❌{% endif %} PROD Repo
-                </span>
-                <span style="font-size:12px;color:#666;margin-left:8px;">{{ github_prod or 'Not Configured' }}</span>
-            </div>
-            <div>
-                <span class="badge badge-ok">✅ App Status</span>
-                <span style="font-size:12px;color:#666;margin-left:8px;">Running</span>
-            </div>
+            <div><span class="badge badge-ok">✅ App Status</span> <span style="font-size:12px;color:#666;margin-left:8px;">Running</span></div>
+            <div><span class="badge badge-ok">✅ Database</span> <span style="font-size:12px;color:#666;margin-left:8px;">Connected</span></div>
+            <div><span class="badge badge-{% if projects %}ok{% else %}grey{% endif %}">📁 Projects</span> <span style="font-size:12px;color:#666;margin-left:8px;">{{ projects|length }} registered</span></div>
         </div>
     </div>
 
@@ -73,7 +58,8 @@
         <h2>Quick Actions</h2>
         <div style="display:flex;flex-direction:column;gap:8px;">
             <button class="btn btn-red" onclick="window.location.href='/projects'">📁 Manage Projects</button>
-            <button class="btn btn-green" onclick="window.location.href='/changes'">📋 View PRs</button>
+            <button class="btn btn-green" onclick="window.location.href='/changes'">📋 Create Change</button>
+            <button class="btn" onclick="window.location.href='/approvals'">✅ Approvals</button>
         </div>
     </div>
 </div>
@@ -82,28 +68,32 @@
 
 <div class="card">
     <h2>Recent Changes</h2>
+    {% if changes %}
     <table>
         <thead>
             <tr>
                 <th>Change ID</th>
                 <th>Project</th>
-                <th>PR #</th>
+                <th>Title</th>
                 <th>Status</th>
                 <th>Created</th>
             </tr>
         </thead>
         <tbody>
-            {% for c in recent_changes %}
+            {% for c in changes %}
             <tr>
                 <td><strong>{{ c.change_id }}</strong></td>
                 <td>{{ c.project_id }}</td>
-                <td>{% if c.pr_number %}PR #{{ c.pr_number }}{% else %}-{% endif %}</td>
+                <td>{{ c.title[:50] if c.title else '-' }}</td>
                 <td>
                     <span class="badge badge-{{ c.approval_status.lower() }}">{{ c.approval_status }}</span>
-                    {% if c.deployment_status == 'Deployed' %}
-                    <span class="badge badge-ok">📦 Deployed</span>
-                    {% elif c.deployment_status == 'Merged' %}
+                    {% if c.deployment_status == 'DEPLOYED' %}
+                    <span class="badge badge-ok">✅ Deployed</span>
+                    {% elif c.deployment_status == 'MERGED' %}
                     <span class="badge badge-ok">✅ Merged</span>
+                    {% endif %}
+                    {% if c.conflict_message %}
+                    <span class="badge badge-conflict">⚠️ Conflict</span>
                     {% endif %}
                 </td>
                 <td>{{ c.created_at[:16] if c.created_at else '-' }}</td>
@@ -111,6 +101,9 @@
             {% endfor %}
         </tbody>
     </table>
+    {% else %}
+    <div style="text-align:center;padding:30px;color:#888;">No changes yet. Create a change request.</div>
+    {% endif %}
 </div>
 
 {% endblock %}
