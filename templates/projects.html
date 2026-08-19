@@ -1,25 +1,42 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>Projects</h1>
-<button class="btn btn-red" onclick="openModal()">+ Register Project</button>
+
+<h1>Project Registry</h1>
+<p class="muted">Project is the child of Cost Center. Repository integration is captured during project registration.</p>
+
+<button class="btn btn-red" onclick="openProjectModal()">+ Register Project</button>
+
 <br><br>
 
 <div class="card">
     <table>
-        <thead><tr><th>ID</th><th>Name</th><th>Cost Center</th><th>Repository</th><th>Status</th><th>Actions</th></tr></thead>
+        <thead>
+            <tr>
+                <th>Project</th>
+                <th>Cost Center</th>
+                <th>Repository</th>
+                <th>Status</th>
+                <th>Branch</th>
+                <th>Running</th>
+                <th>Completed</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
         <tbody>
             {% for p in projects %}
             <tr id="row-{{ p.project_id }}">
-                <td><strong>{{ p.project_id }}</strong></td>
-                <td>{{ p.name }}</td>
-                <td>{{ p.cost_center_id }}</td>
-                <td>{{ p.repository_name or p.repository_url or '-' }}</td>
+                <td><strong>{{ p.project_id }}</strong><br><span class="muted">{{ p.name }}</span></td>
+                <td><strong>{{ p.cost_center_id }}</strong></td>
+                <td><strong>{{ p.provider }}</strong><br><span class="muted">{{ p.repository_name or '-' }}</span></td>
                 <td><span class="badge badge-{{ p.aws_status.lower() }}">{{ p.aws_status }}</span></td>
+                <td><code>{{ p.branch or 'main' }}</code></td>
+                <td>{{ p.running or 0 }}</td>
+                <td>{{ p.completed or 0 }}</td>
                 <td>
-                    <button class="btn btn-sm btn-green" onclick="verify('{{ p.project_id }}')">Verify</button>
-                    <button class="btn btn-sm" onclick="detect('{{ p.project_id }}')">Detect</button>
-                    <button class="btn btn-sm btn-red" onclick="del('{{ p.project_id }}')">Delete</button>
+                    <button class="btn btn-small btn-green" onclick="verifyProject('{{ p.project_id }}')">Verify</button>
+                    <button class="btn btn-small" onclick="detectChanges('{{ p.project_id }}')">Detect</button>
+                    <button class="btn btn-small" onclick="deleteProject('{{ p.project_id }}')">🗑</button>
                 </td>
             </tr>
             {% endfor %}
@@ -28,75 +45,211 @@
 </div>
 
 <script>
-function openModal() {
-    const html = `
-        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;display:flex;align-items:center;justify-content:center;">
-            <div style="background:#fff;padding:30px;border-radius:10px;max-width:500px;width:90%;">
-                <h2>Register Project</h2>
-                <div style="margin:10px 0"><label>Project ID</label><br><input id="pid" value="PRJ-${Math.floor(Math.random()*900+100)}" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:5px"></div>
-                <div style="margin:10px 0"><label>Name</label><br><input id="pname" placeholder="Project name" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:5px"></div>
-                <div style="margin:10px 0"><label>Cost Center</label><br>
-                    <select id="pcc" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:5px">
-                        {% for c in cost_centers %}<option value="{{ c.cc_id }}">{{ c.cc_id }} - {{ c.name }}</option>{% endfor %}
-                    </select>
-                </div>
-                <div style="margin:10px 0"><label>Repository URL</label><br><input id="prepo" placeholder="https://github.com/user/repo" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:5px"></div>
-                <div style="margin:10px 0"><label>Repository Name</label><br><input id="preponame" placeholder="repo-name" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:5px"></div>
-                <div style="margin:10px 0"><label>Branch</label><br><input id="pbranch" value="main" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:5px"></div>
-                <button onclick="createProject()" class="btn btn-red" style="width:100%;padding:10px;">Create</button>
-                <button onclick="document.querySelectorAll('div[style*="position:fixed"]').forEach(e=>e.remove())" style="margin-top:10px;width:100%;padding:10px;border:none;background:#eee;border-radius:5px;cursor:pointer">Cancel</button>
-            </div>
+// ============================================================
+// PROJECT MODAL - Uses the global modal system
+// ============================================================
+
+function openProjectModal() {
+    const costCenters = {{ cost_centers|tojson }};
+    const options = costCenters.map(c => 
+        `<option value="${c.cc_id}">${c.cc_id} — ${c.name}</option>`
+    ).join('');
+    
+    const body = `
+        <div class="form-group">
+            <label>Project ID</label>
+            <input id="newProjectId" value="PRJ-${Math.floor(Math.random()*900+100)}">
         </div>
+        <div class="form-group">
+            <label>Project Name</label>
+            <input id="newProjectName" placeholder="Customer Analytics">
+        </div>
+        <div class="form-group">
+            <label>Cost Center Parent</label>
+            <select id="newProjectCC">${options}</select>
+        </div>
+        <div class="form-group">
+            <label>Repository Provider</label>
+            <select id="newProvider">
+                <option>GitHub</option>
+                <option>Bitbucket</option>
+                <option>AWS CodeCommit</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Repository URL</label>
+            <input id="newRepoURL" placeholder="https://github.com/company/project">
+        </div>
+        <div class="form-group">
+            <label>Repository Name</label>
+            <input id="newRepoName" placeholder="customer-analytics">
+        </div>
+        <div class="form-group">
+            <label>Branch</label>
+            <input id="newBranch" value="main">
+        </div>
+        <div class="form-group">
+            <label>Repository Status</label>
+            <select id="newAWSStatus">
+                <option value="CONNECTED">Connected</option>
+                <option value="PENDING" selected>Pending</option>
+                <option value="NOT CONNECTED">Not Connected</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>AWS Connection Name</label>
+            <input id="newAWSConnection" placeholder="project-github-connection">
+        </div>
+        <button class="btn btn-red" onclick="createProject()">Register Project</button>
     `;
-    document.body.insertAdjacentHTML('beforeend', html);
+    
+    openModal('Register Project + Repository', body);
 }
 
 function createProject() {
     const data = {
-        project_id: document.getElementById('pid').value,
-        name: document.getElementById('pname').value,
-        cost_center_id: document.getElementById('pcc').value,
-        repository_url: document.getElementById('prepo').value,
-        repository_name: document.getElementById('preponame').value,
-        branch: document.getElementById('pbranch').value
+        project_id: document.getElementById('newProjectId').value.trim(),
+        name: document.getElementById('newProjectName').value.trim(),
+        cost_center_id: document.getElementById('newProjectCC').value,
+        provider: document.getElementById('newProvider').value,
+        repository_url: document.getElementById('newRepoURL').value.trim(),
+        repository_name: document.getElementById('newRepoName').value.trim(),
+        branch: document.getElementById('newBranch').value.trim(),
+        aws_status: document.getElementById('newAWSStatus').value,
+        aws_connection: document.getElementById('newAWSConnection').value.trim()
     };
+    
+    if (!data.project_id || !data.name || !data.repository_url) {
+        showToast('Please fill all required fields', 'error');
+        return;
+    }
+    
+    showToast('⏳ Registering project...', 'info');
+    
     fetch('/api/projects', {
         method: 'POST',
-        headers: {'Content-Type':'application/json'},
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
-    }).then(r=>r.json()).then(d=>{
-        if(d.success){alert('✅ Project created!');location.reload();}
-        else alert('❌ '+d.error);
-    });
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.success) {
+            showToast('✅ Project registered!', 'success');
+            closeModal();
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('❌ ' + result.error, 'error');
+        }
+    })
+    .catch(err => showToast('❌ Error: ' + err.message, 'error'));
 }
 
-function verify(pid) {
-    fetch('/api/projects/'+pid+'/verify')
-        .then(r=>r.json())
-        .then(d=>{
-            if(d.success){alert('✅ Connected: '+d.connected+'\nBranches: '+(d.branches||[]).join(', '));location.reload();}
-            else alert('❌ '+d.error);
-        });
+// ============================================================
+// VERIFY PROJECT
+// ============================================================
+
+function verifyProject(projectId) {
+    showToast('🔍 Verifying project ' + projectId + '...', 'info');
+    
+    fetch('/api/projects/' + projectId + '/verify')
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                if (data.connected) {
+                    showToast('✅ Repository connected! Branches: ' + (data.branches || []).join(', '), 'success');
+                } else {
+                    showToast('❌ Repository not connected or not found', 'error');
+                }
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast('❌ Error: ' + data.error, 'error');
+            }
+        })
+        .catch(err => showToast('❌ Error: ' + err.message, 'error'));
 }
 
-function detect(pid) {
-    const branch = prompt('Branch:', 'main');
-    if(!branch) return;
+// ============================================================
+// DETECT CHANGES
+// ============================================================
+
+function detectChanges(projectId) {
+    const branch = prompt('Enter branch name:', 'main');
+    if (branch === null) return;
+    
+    showToast('🔍 Detecting changes...', 'info');
+    
     fetch('/api/detect-changes', {
         method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({project_id: pid, branch: branch})
-    }).then(r=>r.json()).then(d=>{
-        if(d.success){alert('✅ '+d.count+' changes detected');}
-        else alert('❌ '+d.error);
-    });
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: projectId, branch: branch || 'main' })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success && data.changes.length > 0) {
+            let msg = '✅ Detected ' + data.changes.length + ' changes:\n';
+            data.changes.forEach(c => {
+                msg += '  - ' + c.file + ' (' + c.type + ')\n';
+            });
+            msg += '\nCreate change request?';
+            
+            if (confirm(msg)) {
+                const files = data.changes.map(c => ({ file: c.file, type: c.type }));
+                const commit = data.commits && data.commits[0] ? data.commits[0].sha : 'auto-detected';
+                
+                fetch('/api/changes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        project_id: projectId,
+                        commit_sha: commit,
+                        release_version: 'v1.0.' + Math.floor(Math.random() * 1000 + 100),
+                        description: 'Auto-detected ' + data.changes.length + ' changes',
+                        files_changed: files,
+                        branch: branch || 'main'
+                    })
+                })
+                .then(r => r.json())
+                .then(result => {
+                    if (result.success) {
+                        showToast('✅ Change ' + result.data.change_id + ' created!', 'success');
+                        setTimeout(() => location.reload(), 1500);
+                    } else {
+                        showToast('❌ ' + result.error, 'error');
+                    }
+                });
+            }
+        } else if (data.success && data.changes.length === 0) {
+            showToast('✅ No changes detected', 'success');
+        } else {
+            showToast('❌ ' + (data.error || 'Unknown error'), 'error');
+        }
+    })
+    .catch(err => showToast('❌ Error: ' + err.message, 'error'));
 }
 
-function del(pid) {
-    if(!confirm('Delete project '+pid+'?')) return;
-    fetch('/api/projects/'+pid, {method:'DELETE'})
-        .then(r=>r.json())
-        .then(d=>{if(d.success){alert('✅ Deleted');location.reload();}else alert('❌ '+d.error);});
+// ============================================================
+// DELETE PROJECT
+// ============================================================
+
+function deleteProject(projectId) {
+    if (!confirm('⚠️ Delete project ' + projectId + '?')) return;
+    
+    showToast('⏳ Deleting project...', 'info');
+    
+    fetch('/api/projects/' + projectId, {
+        method: 'DELETE'
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('✅ Project deleted', 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('❌ ' + data.error, 'error');
+        }
+    })
+    .catch(err => showToast('❌ Error: ' + err.message, 'error'));
 }
 </script>
+
 {% endblock %}

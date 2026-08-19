@@ -1,67 +1,99 @@
 {% extends "base.html" %}
 
 {% block content %}
+
 <h1>Change Management Control Center</h1>
 <p class="muted">Cost Center → Project → Repository → Change → Approval → Pipeline → Databricks</p>
 <div class="red-line"></div>
 
 <div class="grid grid-4">
-    <div class="card"><div class="metric-label">Cost Centers</div><div class="metric-number blue">{{ cost_centers|length }}</div></div>
-    <div class="card"><div class="metric-label">Projects</div><div class="metric-number blue">{{ projects|length }}</div></div>
-    <div class="card"><div class="metric-label">Running</div><div class="metric-number orange">{{ running_count }}</div></div>
-    <div class="card"><div class="metric-label">Approved</div><div class="metric-number green">{{ approved_count }}</div></div>
-</div>
-
-<div class="card">
-    <h2>End-to-End Flow</h2>
-    <div class="flow">
-        <div class="flow-node primary"><strong>Cost Center</strong>Parent</div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Project</strong>Child</div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Repository</strong>Git</div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node"><strong>Change</strong>Commit</div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Approval</strong>Gate</div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node"><strong>CI/CD</strong>Pipeline</div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Databricks</strong>Deploy</div>
+    <div class="card">
+        <div class="metric-label">Cost Centers</div>
+        <div class="metric-number blue">{{ cost_centers|length }}</div>
+    </div>
+    <div class="card">
+        <div class="metric-label">Projects</div>
+        <div class="metric-number blue">{{ projects|length }}</div>
+    </div>
+    <div class="card">
+        <div class="metric-label">Running Deployments</div>
+        <div class="metric-number orange">{{ running_count }}</div>
+    </div>
+    <div class="card">
+        <div class="metric-label">Approved Changes</div>
+        <div class="metric-number green">{{ approved_count }}</div>
     </div>
 </div>
 
+<br>
+
+<div class="card">
+    <h2>End-to-End Change Management</h2>
+    <div class="flow">
+        <div class="flow-node primary"><strong>Cost Center</strong>Business Parent</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node primary"><strong>Project</strong>Child</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node primary"><strong>Repository</strong>Git Source</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node"><strong>Change</strong>Commit / Release</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node primary"><strong>Approval</strong>Governance Gate</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node"><strong>CI/CD Pipeline</strong>Build / Deploy</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node primary"><strong>Databricks</strong>QA / PROD</div>
+    </div>
+</div>
+
+<br>
+
 <div class="grid grid-2">
     <div class="card">
-        <h2>Cost Centers</h2>
+        <h2>Cost Center Portfolio</h2>
         <table>
-            <thead><tr><th>ID</th><th>Name</th></tr></thead>
+            <thead><tr><th>Cost Center</th><th>Perspective</th><th>Projects</th><th>Running</th></tr></thead>
             <tbody>
                 {% for cc in cost_centers %}
-                <tr><td>{{ cc.cc_id }}</td><td>{{ cc.name }}</td></tr>
+                <tr>
+                    <td><strong>{{ cc.cc_id }}</strong><br>{{ cc.name }}</td>
+                    <td>{{ cc.perspective }}</td>
+                    <td>{{ cc.project_count or 0 }}</td>
+                    <td>{{ cc.running_count or 0 }}</td>
+                </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+
     <div class="card">
         <h2>Current Deployment</h2>
-        {% if active_deployment %}
-        <div class="notice"><strong>{{ active_deployment.change_id }}</strong><br>Status: {{ active_deployment.deployment_status }}</div>
-        {% else %}
-        <div class="notice">No active deployment</div>
-        {% endif %}
+        <div id="dashboardDeployment">
+            {% if active_deployment %}
+            <div class="notice">
+                <strong>{{ active_deployment.change_id }}</strong><br>
+                Project: {{ active_deployment.project_id }}<br>
+                Status: <span class="badge badge-running">{{ active_deployment.deployment_status }}</span>
+            </div>
+            {% else %}
+            <div class="notice">No active production deployment.</div>
+            {% endif %}
+        </div>
     </div>
 </div>
+
+<br>
 
 <div class="card">
     <h2>Recent Changes</h2>
     <table>
-        <thead><tr><th>ID</th><th>Project</th><th>Status</th><th>Created</th></tr></thead>
+        <thead><tr><th>Change ID</th><th>Project</th><th>Commit</th><th>Status</th><th>Created</th></tr></thead>
         <tbody>
             {% for c in recent_changes %}
             <tr>
-                <td>{{ c.change_id }}</td>
+                <td><strong>{{ c.change_id }}</strong></td>
                 <td>{{ c.project_id }}</td>
+                <td><code>{{ c.commit_sha[:8] if c.commit_sha else '-' }}</code></td>
                 <td><span class="badge badge-{{ c.approval_status.lower() }}">{{ c.approval_status }}</span></td>
                 <td>{{ c.created_at[:16] if c.created_at else '-' }}</td>
             </tr>
@@ -69,4 +101,18 @@
         </tbody>
     </table>
 </div>
+
+<br>
+
+<div class="card">
+    <h2>Governance Principle</h2>
+    <div class="notice">
+        <strong>Cost Center is the parent.</strong>
+        Every project must belong to a registered Cost Center.
+        Every project must have a registered source repository.
+        Every production change must have an approval.
+        Every deployment must carry project, repository, commit, release and metadata information.
+    </div>
+</div>
+
 {% endblock %}

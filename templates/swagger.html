@@ -1,26 +1,54 @@
 {% extends "base.html" %}
 
 {% block content %}
+
 <h1>📚 API Documentation</h1>
+<p class="muted">REST API endpoints for the Databricks Orchestrator.</p>
 
 <div class="card">
-    <h2>Available Endpoints</h2>
+    <h2>Base URL</h2>
+    <p><code>/api/</code></p>
+</div>
+
+<div class="card">
+    <h2>Endpoints</h2>
     <table>
         <thead><tr><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
         <tbody>
-            <tr><td><span class="badge badge-ok">GET</span></td><td>/api/cost-centers</td><td>List cost centers</td></tr>
-            <tr><td><span class="badge badge-ok">GET</span></td><td>/api/projects</td><td>List projects</td></tr>
-            <tr><td><span class="badge badge-ok">POST</span></td><td>/api/projects</td><td>Create project</td></tr>
-            <tr><td><span class="badge badge-ok">GET</span></td><td>/api/changes</td><td>List changes</td></tr>
-            <tr><td><span class="badge badge-ok">POST</span></td><td>/api/changes</td><td>Create change</td></tr>
-            <tr><td><span class="badge badge-ok">POST</span></td><td>/api/detect-changes</td><td>Detect changes</td></tr>
-            <tr><td><span class="badge badge-ok">POST</span></td><td>/api/changes/{id}/approve</td><td>Approve change</td></tr>
-            <tr><td><span class="badge badge-ok">POST</span></td><td>/api/changes/{id}/reject</td><td>Reject change</td></tr>
-            <tr><td><span class="badge badge-ok">POST</span></td><td>/api/changes/{id}/deploy</td><td>Deploy change</td></tr>
-            <tr><td><span class="badge badge-ok">GET</span></td><td>/api/deployment-logs</td><td>Get logs</td></tr>
-            <tr><td><span class="badge badge-ok">GET</span></td><td>/api/audit</td><td>Get audit trail</td></tr>
-            <tr><td><span class="badge badge-ok">GET</span></td><td>/health</td><td>Health check</td></tr>
+            <tr><td><span class="badge badge-ok">GET</span></td><td><code>/api/cost-centers</code></td><td>Get all cost centers</td></tr>
+            <tr><td><span class="badge badge-running">POST</span></td><td><code>/api/cost-centers</code></td><td>Create cost center</td></tr>
+            <tr><td><span class="badge badge-ok">GET</span></td><td><code>/api/projects</code></td><td>Get all projects</td></tr>
+            <tr><td><span class="badge badge-running">POST</span></td><td><code>/api/projects</code></td><td>Create project</td></tr>
+            <tr><td><span class="badge badge-running">DELETE</span></td><td><code>/api/projects/{id}</code></td><td>Delete project</td></tr>
+            <tr><td><span class="badge badge-ok">GET</span></td><td><code>/api/projects/{id}/verify</code></td><td>Verify GitHub repo</td></tr>
+            <tr><td><span class="badge badge-ok">GET</span></td><td><code>/api/changes</code></td><td>Get all changes</td></tr>
+            <tr><td><span class="badge badge-running">POST</span></td><td><code>/api/changes</code></td><td>Create change request</td></tr>
+            <tr><td><span class="badge badge-running">POST</span></td><td><code>/api/detect-changes</code></td><td>Detect changes</td></tr>
+            <tr><td><span class="badge badge-running">POST</span></td><td><code>/api/changes/{id}/approve</code></td><td>Approve change</td></tr>
+            <tr><td><span class="badge badge-running">POST</span></td><td><code>/api/changes/{id}/reject</code></td><td>Reject change</td></tr>
+            <tr><td><span class="badge badge-running">POST</span></td><td><code>/api/changes/{id}/deploy</code></td><td>Deploy to PROD</td></tr>
+            <tr><td><span class="badge badge-ok">GET</span></td><td><code>/api/deployment-logs</code></td><td>Get logs</td></tr>
+            <tr><td><span class="badge badge-ok">GET</span></td><td><code>/api/audit</code></td><td>Get audit trail</td></tr>
+            <tr><td><span class="badge badge-ok">GET</span></td><td><code>/health</code></td><td>Health check</td></tr>
         </tbody>
     </table>
 </div>
+
+<div class="card">
+    <h2>Example: Detect Changes</h2>
+    <pre style="background:#f5f5f5;padding:15px;border-radius:5px;font-size:12px;">
+curl -X POST /api/detect-changes \
+  -H "Content-Type: application/json" \
+  -d '{"project_id": "PRJ-001", "branch": "main"}'
+
+Response:
+{
+  "success": true,
+  "changes": [
+    {"file": "notebook.py", "type": "new"}
+  ],
+  "count": 1
+}</pre>
+</div>
+
 {% endblock %}

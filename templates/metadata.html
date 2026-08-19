@@ -1,23 +1,48 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>Metadata Reference</h1>
+
+<h1>Metadata / Databricks Technical Reference</h1>
+<p class="muted">Metadata-driven project structure used by the governance model.</p>
 
 <div class="grid grid-2">
     <div class="card">
+        <h2>Recommended Project Structure</h2>
+        <pre>
+project/
+├── databricks.yml
+├── metadata.json
+├── resources/
+│   ├── jobs.yml
+│   ├── pipelines.yml
+│   └── permissions.yml
+├── src/
+│   ├── notebooks/
+│   ├── jobs/
+│   └── pipelines/
+├── tests/
+│   ├── unit/
+│   └── integration/
+└── README.md</pre>
+    </div>
+
+    <div class="card">
         <h2>metadata.json</h2>
-        <pre style="background:#f5f5f5;padding:15px;border-radius:5px;font-size:12px;">
-{
+        <pre>{
   "cost_center": "CC-4100",
+  "cost_center_name": "Customer Data",
   "project_id": "PRJ-001",
+  "project_name": "Customer Analytics",
   "repository": {
     "provider": "GitHub",
     "name": "customer-analytics",
-    "branch": "main"
+    "branch": "main",
+    "url": "https://github.com/example/customer-analytics"
   },
   "change": {
     "change_id": "CHG-2026-0042",
-    "commit_sha": "8f3a91c2d7"
+    "commit_sha": "8f3a91c2d7",
+    "release": "v1.0.184"
   },
   "approval": "Approved",
   "deployment": {
@@ -26,24 +51,58 @@
   }
 }</pre>
     </div>
-    <div class="card">
-        <h2>databricks.yml</h2>
-        <pre style="background:#f5f5f5;padding:15px;border-radius:5px;font-size:12px;">
+</div>
+
+<br>
+
+<div class="card">
+    <h2>databricks.yml</h2>
+    <pre>
 bundle:
   name: customer-analytics
 
+include:
+  - resources/*.yml
+
 variables:
+  cost_center: "CC-4100"
   project_id: "PRJ-001"
-  environment: "prod"
+  change_id: "CHG-2026-0042"
+  release_version: "v1.0.184"
 
 targets:
-  dev: {mode: development}
-  prod: {mode: production}
+  dev:
+    mode: development
+  prod:
+    mode: production
 
 resources:
   jobs:
-    analytics_job:
-      name: analytics-${var.project_id}</pre>
+    customer_analytics_job:
+      name: customer-analytics-${var.project_id}
+      tasks:
+        - task_key: customer_processing
+          notebook_task:
+            notebook_path: /Workspace/customer-analytics</pre>
+</div>
+
+<br>
+
+<div class="card">
+    <h2>Metadata Validation Concept</h2>
+    <div class="flow">
+        <div class="flow-node primary"><strong>Cost Center</strong>Registered</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node primary"><strong>Project</strong>Registered</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node"><strong>metadata.json</strong>Validated</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node"><strong>databricks.yml</strong>Validated</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node"><strong>Bundle</strong>Built</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node primary"><strong>Databricks</strong>Deploy</div>
     </div>
 </div>
+
 {% endblock %}

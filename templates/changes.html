@@ -1,27 +1,44 @@
 {% extends "base.html" %}
 
 {% block content %}
+
 <h1>Change Register</h1>
+<p class="muted">Register a change against a project and route it through approval before deployment.</p>
+
 <button class="btn btn-red" onclick="openChangeModal()">+ Register Change</button>
+
 <br><br>
 
 <div class="card">
     <table>
-        <thead><tr><th>ID</th><th>Project</th><th>Commit</th><th>Approval</th><th>Status</th><th>Actions</th></tr></thead>
+        <thead>
+            <tr>
+                <th>Change</th>
+                <th>Project</th>
+                <th>Commit</th>
+                <th>Release</th>
+                <th>Approval</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
         <tbody>
             {% for c in changes %}
             <tr>
-                <td>{{ c.change_id }}</td>
+                <td><strong>{{ c.change_id }}</strong></td>
                 <td>{{ c.project_id }}</td>
                 <td><code>{{ c.commit_sha[:8] if c.commit_sha else '-' }}</code></td>
+                <td>{{ c.release_version or '-' }}</td>
                 <td><span class="badge badge-{{ c.approval_status.lower() }}">{{ c.approval_status }}</span></td>
                 <td><span class="badge badge-{{ c.deployment_status.lower() }}">{{ c.deployment_status }}</span></td>
                 <td>
                     {% if c.approval_status == 'Pending' %}
-                    <button class="btn btn-sm btn-green" onclick="approve('{{ c.change_id }}')">Approve</button>
-                    <button class="btn btn-sm" onclick="reject('{{ c.change_id }}')">Reject</button>
+                    <button class="btn btn-small btn-green" onclick="approveChange('{{ c.change_id }}')">Approve</button>
+                    <button class="btn btn-small" onclick="rejectChange('{{ c.change_id }}')">Reject</button>
                     {% elif c.approval_status == 'Approved' and c.deployment_status == 'Ready' %}
-                    <button class="btn btn-sm btn-red" onclick="deploy('{{ c.change_id }}')">Deploy</button>
+                    <button class="btn btn-small btn-red" onclick="deployChange('{{ c.change_id }}')">Deploy</button>
+                    {% else %}
+                    <span class="badge badge-grey">{{ c.deployment_status }}</span>
                     {% endif %}
                 </td>
             </tr>
@@ -31,65 +48,133 @@
 </div>
 
 <script>
+// ============================================================
+// CHANGE MODAL
+// ============================================================
+
 function openChangeModal() {
-    const html = `
-        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;display:flex;align-items:center;justify-content:center;">
-            <div style="background:#fff;padding:30px;border-radius:10px;max-width:500px;width:90%;">
-                <h2>Register Change</h2>
-                <div style="margin:10px 0"><label>Project</label><br>
-                    <select id="chgproj" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:5px">
-                        {% for p in projects %}<option value="{{ p.project_id }}">{{ p.project_id }} - {{ p.name }}</option>{% endfor %}
-                    </select>
-                </div>
-                <div style="margin:10px 0"><label>Commit SHA</label><br><input id="chgcommit" value="8f3a91c2d7" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:5px"></div>
-                <div style="margin:10px 0"><label>Release Version</label><br><input id="chgrelease" value="v1.0.185" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:5px"></div>
-                <button onclick="createChange()" class="btn btn-red" style="width:100%;padding:10px;">Submit</button>
-                <button onclick="document.querySelectorAll('div[style*="position:fixed"]').forEach(e=>e.remove())" style="margin-top:10px;width:100%;padding:10px;border:none;background:#eee;border-radius:5px;cursor:pointer">Cancel</button>
-            </div>
+    const projects = {{ projects|tojson }};
+    const options = projects.map(p => 
+        `<option value="${p.project_id}">${p.project_id} — ${p.name}</option>`
+    ).join('');
+    
+    const body = `
+        <div class="form-group">
+            <label>Project</label>
+            <select id="changeProject">${options}</select>
         </div>
+        <div class="form-group">
+            <label>Commit SHA</label>
+            <input id="changeCommit" value="8f3a91c2d7">
+        </div>
+        <div class="form-group">
+            <label>Release / Bundle Version</label>
+            <input id="changeRelease" value="v1.0.185">
+        </div>
+        <div class="form-group">
+            <label>Change Description</label>
+            <textarea id="changeDescription" placeholder="Describe the change..."></textarea>
+        </div>
+        <button class="btn btn-red" onclick="createChange()">Submit Change</button>
     `;
-    document.body.insertAdjacentHTML('beforeend', html);
+    
+    openModal('Register Change', body);
 }
 
 function createChange() {
     const data = {
-        project_id: document.getElementById('chgproj').value,
-        commit_sha: document.getElementById('chgcommit').value,
-        release_version: document.getElementById('chgrelease').value,
-        description: 'Change request'
+        project_id: document.getElementById('changeProject').value,
+        commit_sha: document.getElementById('changeCommit').value.trim(),
+        release_version: document.getElementById('changeRelease').value.trim(),
+        description: document.getElementById('changeDescription').value.trim() || 'Change request'
     };
+    
+    if (!data.commit_sha) {
+        showToast('Commit SHA is required', 'error');
+        return;
+    }
+    
+    showToast('⏳ Submitting change...', 'info');
+    
     fetch('/api/changes', {
         method: 'POST',
-        headers: {'Content-Type':'application/json'},
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
-    }).then(r=>r.json()).then(d=>{
-        if(d.success){alert('✅ Change created!');location.reload();}
-        else alert('❌ '+d.error);
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.success) {
+            showToast('✅ Change ' + result.data.change_id + ' submitted!', 'success');
+            closeModal();
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('❌ ' + result.error, 'error');
+        }
+    })
+    .catch(err => showToast('❌ Error: ' + err.message, 'error'));
+}
+
+// ============================================================
+// APPROVAL ACTIONS
+// ============================================================
+
+function approveChange(changeId) {
+    if (!confirm('Approve change ' + changeId + '?')) return;
+    
+    fetch('/api/changes/' + changeId + '/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approver: 'databricks-user' })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('✅ Change ' + changeId + ' approved!', 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('❌ ' + data.error, 'error');
+        }
     });
 }
 
-function approve(id) {
-    if(!confirm('Approve '+id+'?')) return;
-    fetch('/api/changes/'+id+'/approve', {method:'POST'})
-        .then(r=>r.json())
-        .then(d=>{if(d.success){alert('✅ Approved');location.reload();}else alert('❌ '+d.error);});
-}
-
-function reject(id) {
-    const reason = prompt('Reason:');
-    if(reason===null) return;
-    fetch('/api/changes/'+id+'/reject', {
+function rejectChange(changeId) {
+    const reason = prompt('Reason for rejection:');
+    if (reason === null) return;
+    
+    fetch('/api/changes/' + changeId + '/reject', {
         method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({reason: reason})
-    }).then(r=>r.json()).then(d=>{if(d.success){alert('❌ Rejected');location.reload();}else alert('❌ '+d.error);});
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approver: 'databricks-user', reason: reason || 'No reason' })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('❌ Change ' + changeId + ' rejected', 'error');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('❌ ' + data.error, 'error');
+        }
+    });
 }
 
-function deploy(id) {
-    if(!confirm('Deploy '+id+'?')) return;
-    fetch('/api/changes/'+id+'/deploy', {method:'POST'})
-        .then(r=>r.json())
-        .then(d=>{if(d.success){alert('🚀 Deployed!');location.reload();}else alert('❌ '+d.error);});
+function deployChange(changeId) {
+    if (!confirm('Deploy change ' + changeId + ' to PROD?')) return;
+    
+    fetch('/api/changes/' + changeId + '/deploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deployer: 'databricks-user' })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('🚀 Change ' + changeId + ' deployed!', 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('❌ ' + data.error, 'error');
+        }
+    });
 }
 </script>
+
 {% endblock %}

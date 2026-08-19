@@ -25,7 +25,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default-secret-key')
 
 # ============================================================
-# DATABASE - Simple working version
+# DATABASE
 # ============================================================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -255,7 +255,6 @@ def index():
     with get_db() as conn:
         pending = conn.execute("SELECT COUNT(*) FROM changes WHERE approval_status = 'Pending'").fetchone()[0]
         approved = conn.execute("SELECT COUNT(*) FROM changes WHERE approval_status = 'Approved'").fetchone()[0]
-        deployed = conn.execute("SELECT COUNT(*) FROM changes WHERE deployment_status = 'Deployed'").fetchone()[0]
         total = conn.execute("SELECT COUNT(*) FROM changes").fetchone()[0]
         
         cost_centers = conn.execute('SELECT * FROM cost_centers').fetchall()
@@ -266,17 +265,20 @@ def index():
         active = conn.execute('SELECT * FROM changes WHERE deployment_status IN ("Deploying", "Ready") LIMIT 1').fetchone()
     
     return render_template('index.html', 
-                         pending_count=pending, approved_count=approved, 
-                         deployed_count=deployed, total_count=total,
+                         pending_count=pending, approved_count=approved, total_count=total,
                          running_count=running, cost_centers=cost_centers,
-                         projects=projects, recent_changes=recent,
-                         active_deployment=active,
-                         github_dev=GITHUB_DEV_REPO, github_prod=GITHUB_PROD_REPO)
+                         projects=projects, recent_changes=recent, active_deployment=active)
 
 @app.route('/cost-centers')
 def cost_centers_page():
     with get_db() as conn:
-        centers = conn.execute('SELECT * FROM cost_centers').fetchall()
+        centers = conn.execute('''
+            SELECT c.*, 
+                   (SELECT COUNT(*) FROM projects WHERE cost_center_id = c.cc_id) as project_count,
+                   (SELECT SUM(running) FROM projects WHERE cost_center_id = c.cc_id) as running_count,
+                   (SELECT SUM(completed) FROM projects WHERE cost_center_id = c.cc_id) as completed_count
+            FROM cost_centers c
+        ''').fetchall()
     return render_template('cost_centers.html', centers=centers)
 
 @app.route('/projects')
@@ -323,7 +325,7 @@ def swagger_page():
 
 @app.route('/health')
 def health():
-    return jsonify({'status': 'healthy', 'db_path': DB_PATH})
+    return jsonify({'status': 'healthy'})
 
 # ============================================================
 # API ROUTES
@@ -342,7 +344,7 @@ def api_create_cost_center():
             conn.execute('INSERT INTO cost_centers (cc_id, name, perspective, owner) VALUES (?, ?, ?, ?)',
                         (data['cc_id'], data['name'], data.get('perspective', 'General'), data.get('owner', '')))
             conn.commit()
-            return jsonify({'success': True, 'message': 'Cost center created'})
+            return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -364,7 +366,7 @@ def api_create_project():
                   data.get('provider', 'GitHub'), data.get('branch', 'main'),
                   data.get('aws_status', 'PENDING'), data.get('aws_connection', '')))
             conn.commit()
-            return jsonify({'success': True, 'message': 'Project created'})
+            return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -375,7 +377,7 @@ def api_delete_project(project_id):
             conn.execute('DELETE FROM changes WHERE project_id = ?', (project_id,))
             conn.execute('DELETE FROM projects WHERE project_id = ?', (project_id,))
             conn.commit()
-            return jsonify({'success': True, 'message': 'Project deleted'})
+            return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -448,10 +450,6 @@ def api_create_change():
             conn.commit()
             
             change = conn.execute('SELECT * FROM changes WHERE change_id = ?', (change_id,)).fetchone()
-            conn.execute('INSERT INTO audit_trail (event, change_id, project_id, commit_sha, result) VALUES (?, ?, ?, ?, ?)',
-                        ('Change Created', change_id, data['project_id'], data.get('commit_sha'), 'Pending'))
-            conn.commit()
-            
             return jsonify({'success': True, 'data': dict(change)})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
