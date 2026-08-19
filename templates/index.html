@@ -1,94 +1,165 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Databricks Orchestrator</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Arial,sans-serif;background:#f5f6fa;padding:20px}
-.container{max-width:1200px;margin:0 auto}
-.header{background:#fff;padding:20px;border-radius:10px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:flex;justify-content:space-between;align-items:center}
-.logo{font-size:22px;font-weight:700}
-.logo span{color:#d71920}
-.nav a{color:#666;text-decoration:none;padding:8px 16px;margin:0 4px;border-radius:5px}
-.nav a:hover{background:#f0f0f0}
-.nav a.active{background:#d71920;color:#fff}
-.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-bottom:20px}
-.metric{background:#fff;padding:20px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
-.metric-label{font-size:12px;color:#888;text-transform:uppercase}
-.metric-value{font-size:32px;font-weight:700;margin-top:5px}
-.metric-value.red{color:#d71920}
-.metric-value.green{color:#16834b}
-.metric-value.blue{color:#315da8}
-.metric-value.orange{color:#e67e22}
-.card{background:#fff;border-radius:10px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1);margin-bottom:20px}
-.btn{padding:8px 20px;border:none;border-radius:5px;font-size:14px;cursor:pointer}
-.btn-primary{background:#d71920;color:#fff}
-.btn-primary:hover{background:#b9141a}
-.btn-success{background:#16834b;color:#fff}
-.btn-success:hover{background:#0f6a3d}
-.btn-outline{background:#fff;color:#333;border:1px solid #ddd}
-.btn-outline:hover{background:#f5f5f5}
-.btn-sm{padding:4px 12px;font-size:12px}
-table{width:100%;border-collapse:collapse}
-th{text-align:left;padding:10px;background:#f8f9fa;border-bottom:2px solid #ddd}
-td{padding:10px;border-bottom:1px solid #eee}
-.badge{display:inline-block;padding:3px 12px;border-radius:15px;font-size:12px;font-weight:600}
-.badge-pending{background:#fff3cd;color:#856404}
-.badge-approved{background:#d4edda;color:#155724}
-.badge-deployed{background:#cce5ff;color:#004085}
-.badge-rejected{background:#f8d7da;color:#721c24}
-.action-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-.toast{position:fixed;bottom:20px;right:20px;background:#333;color:#fff;padding:15px 25px;border-radius:8px;display:none;z-index:999}
-.toast.show{display:block}
-.toast.success{background:#16834b}
-.toast.error{background:#d71920}
-@media(max-width:768px){.metrics{grid-template-columns:1fr 1fr}.grid-2{grid-template-columns:1fr}.header{flex-direction:column}}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Change Management Control Center</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:Arial,sans-serif;background:#f0f2f5;padding:20px}
+        .container{max-width:1400px;margin:0 auto}
+        
+        .header{background:#fff;padding:20px 24px;border-radius:12px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+        .logo{font-size:22px;font-weight:800}
+        .logo span{color:#d71920}
+        .nav{display:flex;gap:8px;flex-wrap:wrap}
+        .nav a{text-decoration:none;color:#666;padding:8px 16px;border-radius:6px;font-weight:600}
+        .nav a:hover{background:#f0f0f0}
+        .nav a.active{background:#d71920;color:#fff}
+        .badge-db{background:#d71920;color:#fff;padding:4px 12px;border-radius:20px;font-size:11px}
+        .badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600}
+        .badge-pending{background:#fff3cd;color:#856404}
+        .badge-approved{background:#d4edda;color:#155724}
+        .badge-deployed{background:#cce5ff;color:#004085}
+        .badge-connected{background:#d4edda;color:#155724}
+        .badge-disconnected{background:#f8d7da;color:#721c24}
+        
+        .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+        .metric-card{background:#fff;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+        .metric-label{font-size:11px;text-transform:uppercase;color:#888;font-weight:600}
+        .metric-value{font-size:32px;font-weight:800;margin-top:4px}
+        .metric-value.red{color:#d71920}
+        .metric-value.green{color:#16834b}
+        .metric-value.blue{color:#315da8}
+        .metric-value.orange{color:#e67e22}
+        
+        .card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1);margin-bottom:20px}
+        .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px}
+        .card-title{font-size:18px;font-weight:700}
+        
+        .btn{padding:8px 20px;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s}
+        .btn-primary{background:#d71920;color:#fff}
+        .btn-primary:hover{background:#b9141a}
+        .btn-success{background:#16834b;color:#fff}
+        .btn-success:hover{background:#0f6a3d}
+        .btn-outline{background:#fff;color:#333;border:1px solid #ddd}
+        .btn-outline:hover{background:#f5f5f5}
+        .btn-sm{padding:4px 12px;font-size:12px}
+        
+        table{width:100%;border-collapse:collapse;font-size:14px}
+        th{text-align:left;padding:10px;background:#f8f9fa;border-bottom:2px solid #ddd}
+        td{padding:10px;border-bottom:1px solid #eee}
+        
+        .action-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+        .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+        
+        .status-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+        .status-dot.green{background:#16834b}
+        .status-dot.yellow{background:#f39c12}
+        .status-dot.red{background:#d71920}
+        .status-dot.grey{background:#888}
+        
+        .flow{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:10px 0}
+        .flow-node{min-width:100px;padding:10px;text-align:center;border:1px solid #ddd;border-radius:8px;background:#fff;font-size:11px}
+        .flow-node strong{display:block;font-size:13px}
+        .flow-node.primary{border:2px solid #d71920;background:#fff5f5}
+        .flow-arrow{color:#999;font-size:18px}
+        
+        .toast{position:fixed;bottom:20px;right:20px;background:#333;color:#fff;padding:16px 24px;border-radius:8px;display:none;z-index:999}
+        .toast.show{display:block}
+        .toast.success{background:#16834b}
+        .toast.error{background:#d71920}
+        
+        @media(max-width:768px){.metrics{grid-template-columns:1fr 1fr}.grid-2{grid-template-columns:1fr}}
+    </style>
 </head>
 <body>
 <div class="container">
-<div class="header">
-<div class="logo">DATABRICKS <span>ORCHESTRATOR</span></div>
-<div class="nav">
-<a href="/" class="active">Dashboard</a>
-<a href="/changes">Changes</a>
-<a href="/approvals">Approvals</a>
-</div>
-</div>
+    <div class="header">
+        <div class="logo">CHANGE <span>CONTROL</span> · DATABRICKS</div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <span class="badge-db">🚀 Databricks App</span>
+            <div class="nav">
+                <a href="/" class="active">Dashboard</a>
+                <a href="/cost-centers">Cost Centers</a>
+                <a href="/projects">Projects</a>
+                <a href="/changes">Changes</a>
+                <a href="/approvals">Approvals</a>
+                <a href="/swagger">API</a>
+            </div>
+        </div>
+    </div>
 
-<div class="metrics">
-<div class="metric"><div class="metric-label">Total</div><div class="metric-value blue">{{ total_count }}</div></div>
-<div class="metric"><div class="metric-label">Pending</div><div class="metric-value orange">{{ pending_count }}</div></div>
-<div class="metric"><div class="metric-label">Approved</div><div class="metric-value green">{{ approved_count }}</div></div>
-<div class="metric"><div class="metric-label">Deployed</div><div class="metric-value red">{{ deployed_count }}</div></div>
-</div>
+    <div class="metrics">
+        <div class="metric-card"><div class="metric-label">Total Changes</div><div class="metric-value blue">{{ total_count }}</div></div>
+        <div class="metric-card"><div class="metric-label">Pending</div><div class="metric-value orange">{{ pending_count }}</div></div>
+        <div class="metric-card"><div class="metric-label">Approved</div><div class="metric-value green">{{ approved_count }}</div></div>
+        <div class="metric-card"><div class="metric-label">Deployed</div><div class="metric-value red">{{ deployed_count }}</div></div>
+    </div>
 
-<div class="action-bar">
-<button class="btn btn-primary" onclick="detectAndCreate()">🔍 Detect & Create Change</button>
-<button class="btn btn-success" onclick="deployToDB()">📦 Deploy to Databricks</button>
-<button class="btn btn-outline" onclick="viewLogs()">📋 View Logs</button>
-</div>
+    <div class="card">
+        <div class="card-header"><div class="card-title">🔁 CI/CD Flow</div></div>
+        <div class="flow">
+            <div class="flow-node primary"><strong>Cost Center</strong>Business Parent</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node primary"><strong>Project</strong>Child</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node primary"><strong>Repository</strong>Git Source</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node"><strong>Change</strong>Commit</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node primary"><strong>Approval</strong>Gate</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node"><strong>CI/CD</strong>Pipeline</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node primary"><strong>Databricks</strong>Deploy</div>
+        </div>
+    </div>
 
-<div class="card">
-<h3>Recent Changes</h3>
-<table>
-<thead><tr><th>ID</th><th>Project</th><th>Status</th><th>Created</th></tr></thead>
-<tbody>
-{% for c in recent_changes %}
-<tr>
-<td>#{{ c.id }}</td>
-<td>{{ c.project_id }}</td>
-<td><span class="badge badge-{{ c.status.lower() }}">{{ c.status }}</span></td>
-<td>{{ c.created_at[:16] if c.created_at else '-' }}</td>
-</tr>
-{% else %}
-<tr><td colspan="4" style="text-align:center;color:#888;padding:20px">No changes yet</td></tr>
-{% endfor %}
-</tbody>
-</table>
-</div>
+    <div class="action-bar">
+        <button class="btn btn-primary" onclick="detectChanges()">🔍 Detect Changes</button>
+        <button class="btn btn-success" onclick="window.location.href='/approvals'">✅ Approve Changes</button>
+        <button class="btn btn-outline" onclick="window.location.href='/swagger'">📚 API Docs</button>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><div class="card-title">📊 Recent Changes</div></div>
+        <table>
+            <thead><tr><th>ID</th><th>Project</th><th>Commit</th><th>Status</th><th>Created</th></tr></thead>
+            <tbody>
+                {% for c in recent_changes %}
+                <tr>
+                    <td><strong>#{{ c.change_id }}</strong></td>
+                    <td>{{ c.project_id }}</td>
+                    <td><code>{{ c.commit_sha[:8] if c.commit_sha else '-' }}</code></td>
+                    <td><span class="badge badge-{{ c.approval_status.lower() }}">{{ c.approval_status }}</span></td>
+                    <td>{{ c.created_at[:16] if c.created_at else '-' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" style="text-align:center;color:#888;padding:20px">No changes yet</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="grid-2">
+        <div class="card">
+            <div class="card-header"><div class="card-title">📡 System Status</div></div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+                <div><span class="status-dot {% if github_dev %}green{% else %}grey{% endif %}"></span>GitHub DEV: <strong>{{ github_dev or 'Not Configured' }}</strong></div>
+                <div><span class="status-dot {% if github_prod %}green{% else %}grey{% endif %}"></span>GitHub PROD: <strong>{{ github_prod or 'Not Configured' }}</strong></div>
+                <div><span class="status-dot green"></span>App Status: <strong>Running</strong></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header"><div class="card-title">🚀 Quick Actions</div></div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+                <button class="btn btn-primary" onclick="detectChanges()">🔍 Detect Changes</button>
+                <button class="btn btn-success" onclick="window.location.href='/approvals'">✅ Approve Changes</button>
+                <button class="btn btn-outline" onclick="window.location.href='/changes'">📋 View All Changes</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -101,66 +172,47 @@ function showToast(msg,type='info'){
     setTimeout(()=>t.className='toast',4000);
 }
 
-function detectAndCreate(){
-    showToast('Detecting changes...','info');
-    fetch('/api/detect-changes',{method:'POST'})
+function detectChanges(){
+    showToast('🔍 Detecting changes...','info');
+    const projectId = prompt('Enter Project ID (e.g., PRJ-001):', 'PRJ-001');
+    if(!projectId) return;
+    const branch = prompt('Enter branch name:', 'main');
+    if(branch===null) return;
+    
+    fetch('/api/detect-changes', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({project_id: projectId, branch: branch})
+    })
     .then(r=>r.json())
     .then(data=>{
         if(data.success && data.changes.length>0){
-            const files=data.changes.map(c=>({file:c.file,type:c.type}));
-            fetch('/api/create-change-request',{
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({
-                    project_id:'PRJ-001',
-                    change_type:'sync',
-                    description:'Sync '+data.changes.length+' files',
-                    files_changed:files
+            const files = data.changes.map(c=>({file:c.file,type:c.type}));
+            const commit = data.commits && data.commits[0] ? data.commits[0].sha : 'abc123def';
+            
+            fetch('/api/changes', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({
+                    project_id: projectId,
+                    commit_sha: commit,
+                    release_version: 'v1.0.'+Math.floor(Math.random()*1000+100),
+                    description: 'Sync '+data.changes.length+' files',
+                    files_changed: files
                 })
             })
             .then(r=>r.json())
             .then(result=>{
                 if(result.success){
-                    showToast('✅ Change #'+result.change.id+' created!','success');
-                    setTimeout(()=>location.reload(),1500);
-                }else showToast('❌ '+result.error,'error');
+                    showToast('✅ Change '+result.data.change_id+' created!','success');
+                    setTimeout(()=>location.reload(),2000);
+                } else showToast('❌ '+result.error,'error');
             });
-        }else if(data.success && data.changes.length===0){
+        } else if(data.success && data.changes.length===0){
             showToast('✅ No changes detected','success');
-        }else showToast('❌ '+data.error,'error');
+        } else showToast('❌ '+data.error,'error');
     })
     .catch(e=>showToast('❌ '+e.message,'error'));
-}
-
-function deployToDB(){
-    if(confirm('Deploy to Databricks?')){
-        showToast('Deploying...','info');
-        fetch('/api/databricks/deploy',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({environment:'dev',bundle_path:'/Workspace/databricks-poc'})
-        })
-        .then(r=>r.json())
-        .then(data=>{
-            if(data.success) showToast('✅ Deployed!','success');
-            else showToast('❌ '+data.error,'error');
-        });
-    }
-}
-
-function viewLogs(){
-    fetch('/api/deployment-logs')
-    .then(r=>r.json())
-    .then(data=>{
-        if(data.success){
-            let txt='=== LOGS ===\n\n';
-            data.logs.forEach(l=>{
-                txt+='['+l.created_at+'] '+l.action+' → '+l.status+'\n';
-                txt+='  '+l.details+'\n\n';
-            });
-            alert(txt);
-        }
-    });
 }
 </script>
 </body>
