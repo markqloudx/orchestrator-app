@@ -16,7 +16,7 @@ app.secret_key = os.environ.get('SECRET_KEY', 'default-secret-key')
 
 # Create a new token at: https://github.com/settings/tokens
 # Select ALL repo scopes, set expiration to "No expiration"
-GITHUB_TOKEN = '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'  # ← REPLACE THIS
+GITHUB_TOKEN = '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'  # ← REPLACE THIS
 
 # ============================================================
 # DATABASE
