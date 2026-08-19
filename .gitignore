@@ -1,0 +1,6 @@
+# .gitignore
+.env
+*.pyc
+__pycache__/
+orchestrator.db
+*.db
