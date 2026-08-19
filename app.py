@@ -321,7 +321,6 @@ def index():
         
         running = conn.execute("SELECT SUM(running) FROM projects").fetchone()[0] or 0
         
-        # Get current deployment status
         active_deployment = conn.execute('''
             SELECT * FROM changes 
             WHERE deployment_status = 'Deploying' OR deployment_status = 'Ready'
@@ -530,6 +529,27 @@ def api_create_project():
             conn.commit()
         
         return jsonify({'success': True, 'data': dict(project)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/projects/<project_id>', methods=['DELETE'])
+def api_delete_project(project_id):
+    try:
+        with get_db() as conn:
+            project = conn.execute('SELECT * FROM projects WHERE project_id = ?', (project_id,)).fetchone()
+            if not project:
+                return jsonify({'success': False, 'error': 'Project not found'}), 404
+            
+            conn.execute('DELETE FROM changes WHERE project_id = ?', (project_id,))
+            conn.execute('DELETE FROM projects WHERE project_id = ?', (project_id,))
+            
+            conn.execute('''
+                INSERT INTO audit_trail (event, project_id, result, details)
+                VALUES (?, ?, ?, ?)
+            ''', ('Project Deleted', project_id, 'Success', f'Deleted project {project_id}'))
+            conn.commit()
+        
+        return jsonify({'success': True, 'message': f'Project {project_id} deleted'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -835,31 +855,6 @@ def api_get_audit():
         audit = conn.execute('SELECT * FROM audit_trail ORDER BY time DESC LIMIT ?', (limit,)).fetchall()
     return jsonify({'success': True, 'data': [dict(a) for a in audit]})
 
-@app.route('/api/projects/<project_id>', methods=['DELETE'])
-def api_delete_project(project_id):
-    try:
-        with get_db() as conn:
-            # Check if project exists
-            project = conn.execute('SELECT * FROM projects WHERE project_id = ?', (project_id,)).fetchone()
-            if not project:
-                return jsonify({'success': False, 'error': 'Project not found'}), 404
-            
-            # Delete associated changes first
-            conn.execute('DELETE FROM changes WHERE project_id = ?', (project_id,))
-            
-            # Delete project
-            conn.execute('DELETE FROM projects WHERE project_id = ?', (project_id,))
-            
-            # Log to audit
-            conn.execute('''
-                INSERT INTO audit_trail (event, project_id, result, details)
-                VALUES (?, ?, ?, ?)
-            ''', ('Project Deleted', project_id, 'Success', f'Deleted project {project_id}'))
-            conn.commit()
-        
-        return jsonify({'success': True, 'message': f'Project {project_id} deleted'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
 # ============================================================
 # RUN APP
 # ============================================================
