@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Approvals</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Arial,sans-serif;background:#f5f6fa;padding:20px}
+.container{max-width:1200px;margin:0 auto}
+.header{background:#fff;padding:20px;border-radius:10px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center}
+.logo{font-size:22px;font-weight:700}
+.logo span{color:#d71920}
+.nav a{color:#666;text-decoration:none;padding:8px 16px}
+.nav a.active{background:#d71920;color:#fff;border-radius:5px}
+.card{background:#fff;border-radius:10px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+.btn{padding:6px 14px;border:none;border-radius:5px;font-size:12px;cursor:pointer}
+.btn-success{background:#16834b;color:#fff}
+.btn-success:hover{background:#0f6a3d}
+.btn-danger{background:#d71920;color:#fff}
+.btn-danger:hover{background:#b9141a}
+.btn-primary{background:#315da8;color:#fff}
+.btn-primary:hover{background:#264a87}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:10px;background:#f8f9fa;border-bottom:2px solid #ddd}
+td{padding:10px;border-bottom:1px solid #eee}
+.badge{display:inline-block;padding:3px 12px;border-radius:15px;font-size:12px;font-weight:600}
+.badge-pending{background:#fff3cd;color:#856404}
+.actions{display:flex;gap:5px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="header">
+<div class="logo">DATABRICKS <span>ORCHESTRATOR</span></div>
+<div class="nav">
+<a href="/">Dashboard</a>
+<a href="/changes">Changes</a>
+<a href="/approvals" class="active">Approvals</a>
+</div>
+</div>
+
+<div class="card">
+<h3>✅ Pending Approvals ({{ changes|length }})</h3>
+<br>
+{% if changes %}
+<table>
+<thead><tr><th>ID</th><th>Project</th><th>Description</th><th>Files</th><th>Actions</th></tr></thead>
+<tbody>
+{% for c in changes %}
+<tr>
+<td>#{{ c.id }}</td>
+<td>{{ c.project_id }}</td>
+<td>{{ c.description[:50] }}</td>
+<td>{{ c.files_changed[:50] if c.files_changed else '-' }}</td>
+<td class="actions">
+<button class="btn btn-success" onclick="approve({{ c.id }})">✅ Approve</button>
+<button class="btn btn-danger" onclick="reject({{ c.id }})">❌ Reject</button>
+<button class="btn btn-primary" onclick="deploy({{ c.id }})">🚀 Deploy</button>
+</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% else %}
+<p style="text-align:center;color:#888;padding:30px">🎉 No pending approvals</p>
+{% endif %}
+</div>
+</div>
+
+<script>
+function approve(id){
+    if(confirm('Approve #'+id+'?')){
+        fetch('/api/approve-change/'+id,{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({approver:'user'})
+        })
+        .then(r=>r.json())
+        .then(d=>{if(d.success){alert('✅ Approved!');location.reload();}else alert('❌ '+d.error)});
+    }
+}
+function reject(id){
+    const r=prompt('Reason:');
+    if(r!==null){
+        fetch('/api/reject-change/'+id,{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({approver:'user',reason:r||'No reason'})
+        })
+        .then(r=>r.json())
+        .then(d=>{if(d.success){alert('❌ Rejected');location.reload();}else alert('❌ '+d.error)});
+    }
+}
+function deploy(id){
+    if(confirm('Deploy #'+id+' to PROD?')){
+        fetch('/api/deploy-change/'+id,{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({deployer:'user'})
+        })
+        .then(r=>r.json())
+        .then(d=>{if(d.success){alert('✅ Deployed!');location.reload();}else alert('❌ '+d.error)});
+    }
+}
+</script>
+</body>
+</html>

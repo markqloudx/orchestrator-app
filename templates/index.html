@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Databricks Orchestrator</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Arial,sans-serif;background:#f5f6fa;padding:20px}
+.container{max-width:1200px;margin:0 auto}
+.header{background:#fff;padding:20px;border-radius:10px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:flex;justify-content:space-between;align-items:center}
+.logo{font-size:22px;font-weight:700}
+.logo span{color:#d71920}
+.nav a{color:#666;text-decoration:none;padding:8px 16px;margin:0 4px;border-radius:5px}
+.nav a:hover{background:#f0f0f0}
+.nav a.active{background:#d71920;color:#fff}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-bottom:20px}
+.metric{background:#fff;padding:20px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+.metric-label{font-size:12px;color:#888;text-transform:uppercase}
+.metric-value{font-size:32px;font-weight:700;margin-top:5px}
+.metric-value.red{color:#d71920}
+.metric-value.green{color:#16834b}
+.metric-value.blue{color:#315da8}
+.metric-value.orange{color:#e67e22}
+.card{background:#fff;border-radius:10px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1);margin-bottom:20px}
+.btn{padding:8px 20px;border:none;border-radius:5px;font-size:14px;cursor:pointer}
+.btn-primary{background:#d71920;color:#fff}
+.btn-primary:hover{background:#b9141a}
+.btn-success{background:#16834b;color:#fff}
+.btn-success:hover{background:#0f6a3d}
+.btn-outline{background:#fff;color:#333;border:1px solid #ddd}
+.btn-outline:hover{background:#f5f5f5}
+.btn-sm{padding:4px 12px;font-size:12px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:10px;background:#f8f9fa;border-bottom:2px solid #ddd}
+td{padding:10px;border-bottom:1px solid #eee}
+.badge{display:inline-block;padding:3px 12px;border-radius:15px;font-size:12px;font-weight:600}
+.badge-pending{background:#fff3cd;color:#856404}
+.badge-approved{background:#d4edda;color:#155724}
+.badge-deployed{background:#cce5ff;color:#004085}
+.badge-rejected{background:#f8d7da;color:#721c24}
+.action-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.toast{position:fixed;bottom:20px;right:20px;background:#333;color:#fff;padding:15px 25px;border-radius:8px;display:none;z-index:999}
+.toast.show{display:block}
+.toast.success{background:#16834b}
+.toast.error{background:#d71920}
+@media(max-width:768px){.metrics{grid-template-columns:1fr 1fr}.grid-2{grid-template-columns:1fr}.header{flex-direction:column}}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="header">
+<div class="logo">DATABRICKS <span>ORCHESTRATOR</span></div>
+<div class="nav">
+<a href="/" class="active">Dashboard</a>
+<a href="/changes">Changes</a>
+<a href="/approvals">Approvals</a>
+</div>
+</div>
+
+<div class="metrics">
+<div class="metric"><div class="metric-label">Total</div><div class="metric-value blue">{{ total_count }}</div></div>
+<div class="metric"><div class="metric-label">Pending</div><div class="metric-value orange">{{ pending_count }}</div></div>
+<div class="metric"><div class="metric-label">Approved</div><div class="metric-value green">{{ approved_count }}</div></div>
+<div class="metric"><div class="metric-label">Deployed</div><div class="metric-value red">{{ deployed_count }}</div></div>
+</div>
+
+<div class="action-bar">
+<button class="btn btn-primary" onclick="detectAndCreate()">🔍 Detect & Create Change</button>
+<button class="btn btn-success" onclick="deployToDB()">📦 Deploy to Databricks</button>
+<button class="btn btn-outline" onclick="viewLogs()">📋 View Logs</button>
+</div>
+
+<div class="card">
+<h3>Recent Changes</h3>
+<table>
+<thead><tr><th>ID</th><th>Project</th><th>Status</th><th>Created</th></tr></thead>
+<tbody>
+{% for c in recent_changes %}
+<tr>
+<td>#{{ c.id }}</td>
+<td>{{ c.project_id }}</td>
+<td><span class="badge badge-{{ c.status.lower() }}">{{ c.status }}</span></td>
+<td>{{ c.created_at[:16] if c.created_at else '-' }}</td>
+</tr>
+{% else %}
+<tr><td colspan="4" style="text-align:center;color:#888;padding:20px">No changes yet</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function showToast(msg,type='info'){
+    const t=document.getElementById('toast');
+    t.textContent=msg;
+    t.className='toast show '+type;
+    setTimeout(()=>t.className='toast',4000);
+}
+
+function detectAndCreate(){
+    showToast('Detecting changes...','info');
+    fetch('/api/detect-changes',{method:'POST'})
+    .then(r=>r.json())
+    .then(data=>{
+        if(data.success && data.changes.length>0){
+            const files=data.changes.map(c=>({file:c.file,type:c.type}));
+            fetch('/api/create-change-request',{
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({
+                    project_id:'PRJ-001',
+                    change_type:'sync',
+                    description:'Sync '+data.changes.length+' files',
+                    files_changed:files
+                })
+            })
+            .then(r=>r.json())
+            .then(result=>{
+                if(result.success){
+                    showToast('✅ Change #'+result.change.id+' created!','success');
+                    setTimeout(()=>location.reload(),1500);
+                }else showToast('❌ '+result.error,'error');
+            });
+        }else if(data.success && data.changes.length===0){
+            showToast('✅ No changes detected','success');
+        }else showToast('❌ '+data.error,'error');
+    })
+    .catch(e=>showToast('❌ '+e.message,'error'));
+}
+
+function deployToDB(){
+    if(confirm('Deploy to Databricks?')){
+        showToast('Deploying...','info');
+        fetch('/api/databricks/deploy',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({environment:'dev',bundle_path:'/Workspace/databricks-poc'})
+        })
+        .then(r=>r.json())
+        .then(data=>{
+            if(data.success) showToast('✅ Deployed!','success');
+            else showToast('❌ '+data.error,'error');
+        });
+    }
+}
+
+function viewLogs(){
+    fetch('/api/deployment-logs')
+    .then(r=>r.json())
+    .then(data=>{
+        if(data.success){
+            let txt='=== LOGS ===\n\n';
+            data.logs.forEach(l=>{
+                txt+='['+l.created_at+'] '+l.action+' → '+l.status+'\n';
+                txt+='  '+l.details+'\n\n';
+            });
+            alert(txt);
+        }
+    });
+}
+</script>
+</body>
+</html>
