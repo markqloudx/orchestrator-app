@@ -7,22 +7,6 @@ from datetime import datetime
 import sqlite3
 
 # ============================================================
-# LOAD ENVIRONMENT VARIABLES FROM .env
-# ============================================================
-
-# Try to load .env file if it exists (local development)
-try:
-    with open('.env', 'r') as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith('#'):
-                key, value = line.split('=', 1)
-                os.environ[key] = value
-    print("✅ Loaded .env file")
-except FileNotFoundError:
-    print("ℹ️ No .env file found - using system environment variables")
-
-# ============================================================
 # CONFIGURATION - Reads from Environment Variables
 # ============================================================
 
@@ -31,11 +15,6 @@ DATABRICKS_TOKEN = os.environ.get('DATABRICKS_TOKEN', '')
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
 GITHUB_DEV_REPO = os.environ.get('GITHUB_DEV_REPO', '')
 GITHUB_PROD_REPO = os.environ.get('GITHUB_PROD_REPO', '')
-
-print(f"🔑 GitHub configured: {bool(GITHUB_TOKEN)}")
-print(f"🔑 Databricks configured: {bool(DATABRICKS_TOKEN)}")
-print(f"📁 GitHub DEV Repo: {GITHUB_DEV_REPO}")
-print(f"📁 GitHub PROD Repo: {GITHUB_PROD_REPO}")
 
 # ============================================================
 # FLASK APP
