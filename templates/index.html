@@ -3,7 +3,7 @@
 {% block content %}
 
 <h1>Change Management Control Center</h1>
-<p class="muted">Cost Center → Project → Repository → PR → Approval → Merge → Deploy → Databricks</p>
+<p class="muted">DEV Repository → PR → Approval → Merge → PROD Repository → Deploy → Databricks</p>
 <div class="red-line"></div>
 
 <div class="grid grid-4">
@@ -20,27 +20,25 @@
         <div class="metric-number orange">{{ pending_count }}</div>
     </div>
     <div class="card">
-        <div class="metric-label">Merged</div>
-        <div class="metric-number green">{{ merged_count }}</div>
+        <div class="metric-label">Deployed to DB</div>
+        <div class="metric-number green">{{ deployed_count }}</div>
     </div>
 </div>
 
 <br>
 
 <div class="card">
-    <h2>End-to-End Change Management</h2>
+    <h2>End-to-End Flow</h2>
     <div class="flow">
-        <div class="flow-node primary"><strong>Cost Center</strong>Business Parent</div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Project</strong>Child</div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Repository</strong>Git Source</div>
+        <div class="flow-node primary"><strong>DEV Repo</strong>Source</div>
         <div class="flow-arrow">→</div>
         <div class="flow-node"><strong>PR</strong>Pull Request</div>
         <div class="flow-arrow">→</div>
         <div class="flow-node primary"><strong>Approval</strong>Gate</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node"><strong>Merge</strong>To PROD</div>
+        <div class="flow-node"><strong>Merge</strong>to PROD</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node primary"><strong>PROD Repo</strong>Target</div>
         <div class="flow-arrow">→</div>
         <div class="flow-node primary"><strong>Databricks</strong>Deploy</div>
     </div>
@@ -76,7 +74,6 @@
         <div style="display:flex;flex-direction:column;gap:8px;">
             <button class="btn btn-red" onclick="window.location.href='/projects'">📁 Manage Projects</button>
             <button class="btn btn-green" onclick="window.location.href='/changes'">📋 View PRs</button>
-            <button class="btn" onclick="window.location.href='/approvals'">✅ Approvals</button>
         </div>
     </div>
 </div>
@@ -84,7 +81,7 @@
 <br>
 
 <div class="card">
-    <h2>Recent Changes / PRs</h2>
+    <h2>Recent Changes</h2>
     <table>
         <thead>
             <tr>
@@ -102,10 +99,10 @@
                 <td>{{ c.project_id }}</td>
                 <td>{% if c.pr_number %}PR #{{ c.pr_number }}{% else %}-{% endif %}</td>
                 <td>
-                    <span class="badge badge-{{ c.approval_status.lower() }}">
-                        {{ c.approval_status }}
-                    </span>
-                    {% if c.deployment_status == 'Merged' %}
+                    <span class="badge badge-{{ c.approval_status.lower() }}">{{ c.approval_status }}</span>
+                    {% if c.deployment_status == 'Deployed' %}
+                    <span class="badge badge-ok">📦 Deployed</span>
+                    {% elif c.deployment_status == 'Merged' %}
                     <span class="badge badge-ok">✅ Merged</span>
                     {% endif %}
                 </td>
@@ -114,20 +111,6 @@
             {% endfor %}
         </tbody>
     </table>
-</div>
-
-<br>
-
-<div class="card">
-    <h2>Governance Principle</h2>
-    <div class="notice">
-        <strong>Cost Center is the parent.</strong>
-        Every project must belong to a registered Cost Center.
-        Every project must have a registered source repository.
-        Every production change must go through a Pull Request.
-        Every PR must have an approval before merging.
-        Every deployment must carry project, repository, commit, release and metadata information.
-    </div>
 </div>
 
 {% endblock %}

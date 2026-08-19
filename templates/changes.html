@@ -3,184 +3,77 @@
 {% block content %}
 
 <h1>Change Register</h1>
-<p class="muted">Create Pull Requests and manage the approval workflow.</p>
+<p class="muted">DEV → PROD → Databricks workflow</p>
 
-<button class="btn btn-red" onclick="openChangeModal()">+ Create Pull Request</button>
+<button class="btn btn-red" onclick="window.location.href='/projects'">📁 Go to Projects</button>
 
 <br><br>
 
 <div class="card">
-    <table>
-        <thead>
-            <tr>
-                <th>Change ID</th>
-                <th>Project</th>
-                <th>PR #</th>
-                <th>Commit</th>
-                <th>Approval</th>
-                <th>Status</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for c in changes %}
-            <tr>
-                <td><strong>{{ c.change_id }}</strong></td>
-                <td>{{ c.project_id }}</td>
-                <td>
-                    {% if c.pr_number %}
-                    <a href="{{ c.pr_url }}" target="_blank">#{{ c.pr_number }}</a>
-                    {% else %}
-                    -
-                    {% endif %}
-                </td>
-                <td><code>{{ c.commit_sha[:8] if c.commit_sha else '-' }}</code></td>
-                <td>
-                    <span class="badge badge-{{ c.approval_status.lower() }}">
-                        {{ c.approval_status }}
-                    </span>
-                </td>
-                <td>
-                    <span class="badge badge-{{ c.deployment_status.lower() }}">
-                        {{ c.deployment_status }}
-                    </span>
-                </td>
-                <td>
-                    {% if c.approval_status == 'Pending' %}
-                    <button class="btn btn-small btn-green" onclick="approveChange('{{ c.change_id }}')">Approve</button>
-                    <button class="btn btn-small" onclick="rejectChange('{{ c.change_id }}')">Reject</button>
-                    {% elif c.approval_status == 'Approved' and c.deployment_status != 'Merged' %}
-                    <button class="btn btn-small btn-red" onclick="mergeChange('{{ c.change_id }}')">Merge PR</button>
-                    <button class="btn btn-small" onclick="deployChange('{{ c.change_id }}')">Deploy</button>
-                    {% elif c.deployment_status == 'Merged' %}
-                    <span class="badge badge-ok">✅ Merged</span>
-                    {% else %}
-                    <span class="badge badge-grey">{{ c.deployment_status }}</span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div style="overflow-x:auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Change ID</th>
+                    <th>Project</th>
+                    <th>PR #</th>
+                    <th>Commit</th>
+                    <th>Approval</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in changes %}
+                <tr>
+                    <td><strong>{{ c.change_id }}</strong></td>
+                    <td>{{ c.project_id }}</td>
+                    <td>
+                        {% if c.pr_number %}
+                        <a href="{{ c.pr_url }}" target="_blank">#{{ c.pr_number }}</a>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td><code>{{ c.commit_sha[:8] if c.commit_sha else '-' }}</code></td>
+                    <td>
+                        <span class="badge badge-{{ c.approval_status.lower() }}">
+                            {{ c.approval_status }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge badge-{{ c.deployment_status.lower() }}">
+                            {{ c.deployment_status }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if c.approval_status == 'Pending' %}
+                        <button class="btn btn-small btn-green" onclick="approveChange('{{ c.change_id }}')">✅ Approve</button>
+                        <button class="btn btn-small" onclick="rejectChange('{{ c.change_id }}')">❌ Reject</button>
+                        
+                        {% elif c.approval_status == 'Approved' and c.deployment_status != 'Merged' %}
+                        <button class="btn btn-small btn-red" onclick="mergeChange('{{ c.change_id }}')">🔀 Merge to PROD</button>
+                        
+                        {% elif c.deployment_status == 'Merged' and c.deployment_status != 'Deployed' %}
+                        <button class="btn btn-small" onclick="deployToDatabricks('{{ c.change_id }}')">📦 Deploy to DB</button>
+                        
+                        {% elif c.deployment_status == 'Deployed' %}
+                        <span class="badge badge-ok">✅ Deployed to Databricks</span>
+                        
+                        {% else %}
+                        <span class="badge badge-grey">{{ c.deployment_status }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <script>
-// ============================================================
-// OPEN CHANGE MODAL - Create PR
-// ============================================================
-
-function openChangeModal() {
-    const projects = {{ projects|tojson }};
-    const options = projects.map(p => 
-        `<option value="${p.project_id}">${p.project_id} — ${p.name}</option>`
-    ).join('');
-    
-    const body = `
-        <div class="form-group">
-            <label>Project</label>
-            <select id="changeProject">${options}</select>
-        </div>
-        <div class="form-group">
-            <label>Branch Name (head branch)</label>
-            <input id="changeBranch" value="feature/update" placeholder="feature/your-branch">
-        </div>
-        <div class="form-group">
-            <label>Commit SHA</label>
-            <input id="changeCommit" value="8f3a91c2d7" placeholder="Enter commit SHA">
-        </div>
-        <div class="form-group">
-            <label>Release / Bundle Version</label>
-            <input id="changeRelease" value="v1.0.185">
-        </div>
-        <div class="form-group">
-            <label>PR Title</label>
-            <input id="changeTitle" placeholder="PR Title" value="Update from feature branch">
-        </div>
-        <div class="form-group">
-            <label>Description</label>
-            <textarea id="changeDescription" placeholder="Describe the changes...">Updated code with new features</textarea>
-        </div>
-        <button class="btn btn-red" onclick="createPR()">Create Pull Request</button>
-    `;
-    
-    openModal('Create Pull Request', body);
-}
-
-// ============================================================
-// CREATE PR
-// ============================================================
-
-function createPR() {
-    const project_id = document.getElementById('changeProject').value;
-    const branch = document.getElementById('changeBranch').value.trim();
-    const commit_sha = document.getElementById('changeCommit').value.trim();
-    const release_version = document.getElementById('changeRelease').value.trim();
-    const title = document.getElementById('changeTitle').value.trim();
-    const description = document.getElementById('changeDescription').value.trim();
-    
-    if (!project_id || !branch || !commit_sha) {
-        showToast('Please fill all required fields', 'error');
-        return;
-    }
-    
-    // First detect changes
-    showToast('🔍 Detecting changes...', 'info');
-    
-    fetch('/api/detect-changes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: project_id, branch: branch })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success && data.changes.length > 0) {
-            // Create PR with detected changes
-            const files = data.changes.map(c => ({ file: c.file, type: c.type }));
-            
-            showToast('⏳ Creating PR...', 'info');
-            
-            fetch('/api/create-pr', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    project_id: project_id,
-                    branch: branch,
-                    title: title,
-                    description: description,
-                    files_changed: files,
-                    commit_sha: commit_sha,
-                    release_version: release_version
-                })
-            })
-            .then(r => r.json())
-            .then(result => {
-                if (result.success) {
-                    const pr = result.pr;
-                    const change = result.data;
-                    showToast('✅ PR #' + pr.number + ' created! Change: ' + change.change_id, 'success');
-                    closeModal();
-                    setTimeout(() => location.reload(), 1500);
-                } else {
-                    showToast('❌ ' + result.error, 'error');
-                }
-            });
-        } else if (data.success && data.changes.length === 0) {
-            showToast('⚠️ No changes detected. Create a change first.', 'error');
-        } else {
-            showToast('❌ ' + (data.error || 'Unknown error'), 'error');
-        }
-    })
-    .catch(err => showToast('❌ Error: ' + err.message, 'error'));
-}
-
-// ============================================================
-// APPROVE CHANGE
-// ============================================================
-
 function approveChange(changeId) {
     if (!confirm('Approve change ' + changeId + '?')) return;
-    
-    showToast('⏳ Approving...', 'info');
     
     fetch('/api/changes/' + changeId + '/approve', {
         method: 'POST',
@@ -190,48 +83,17 @@ function approveChange(changeId) {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            showToast('✅ Change ' + changeId + ' approved!', 'success');
+            showToast('✅ Change approved!', 'success');
             setTimeout(() => location.reload(), 1500);
         } else {
             showToast('❌ ' + data.error, 'error');
         }
     });
 }
-
-// ============================================================
-// MERGE PR
-// ============================================================
-
-function mergeChange(changeId) {
-    if (!confirm('Merge PR for change ' + changeId + '?')) return;
-    
-    showToast('⏳ Merging...', 'info');
-    
-    fetch('/api/changes/' + changeId + '/merge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ merger: 'databricks-user' })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            showToast('✅ PR merged successfully!', 'success');
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            showToast('❌ ' + data.error, 'error');
-        }
-    });
-}
-
-// ============================================================
-// REJECT CHANGE
-// ============================================================
 
 function rejectChange(changeId) {
     const reason = prompt('Reason for rejection:');
     if (reason === null) return;
-    
-    showToast('⏳ Rejecting...', 'info');
     
     fetch('/api/changes/' + changeId + '/reject', {
         method: 'POST',
@@ -241,7 +103,7 @@ function rejectChange(changeId) {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            showToast('❌ Change ' + changeId + ' rejected', 'error');
+            showToast('❌ Change rejected', 'error');
             setTimeout(() => location.reload(), 1500);
         } else {
             showToast('❌ ' + data.error, 'error');
@@ -249,16 +111,33 @@ function rejectChange(changeId) {
     });
 }
 
-// ============================================================
-// DEPLOY CHANGE
-// ============================================================
+function mergeChange(changeId) {
+    if (!confirm('Merge PR to PROD?')) return;
+    
+    showToast('⏳ Merging to PROD...', 'info');
+    
+    fetch('/api/changes/' + changeId + '/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ merger: 'databricks-user' })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('✅ PR merged to PROD!', 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('❌ ' + data.error, 'error');
+        }
+    });
+}
 
-function deployChange(changeId) {
-    if (!confirm('Deploy change ' + changeId + ' to PROD?')) return;
+function deployToDatabricks(changeId) {
+    if (!confirm('Deploy to Databricks PROD?')) return;
     
-    showToast('⏳ Deploying...', 'info');
+    showToast('📦 Deploying to Databricks...', 'info');
     
-    fetch('/api/changes/' + changeId + '/deploy', {
+    fetch('/api/changes/' + changeId + '/deploy-databricks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deployer: 'databricks-user' })
@@ -266,8 +145,7 @@ function deployChange(changeId) {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            const synced = data.sync_results.filter(r => r.success).length;
-            showToast('🚀 Change ' + changeId + ' deployed! ' + synced + ' files synced.', 'success');
+            showToast('✅ Deployed to Databricks!', 'success');
             setTimeout(() => location.reload(), 1500);
         } else {
             showToast('❌ ' + data.error, 'error');
