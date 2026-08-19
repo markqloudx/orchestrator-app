@@ -7,63 +7,98 @@ from datetime import datetime
 import sqlite3
 
 # ============================================================
-# CONFIGURATION
+# LOAD ENVIRONMENT VARIABLES FROM .env
 # ============================================================
 
-DATABRICKS_HOST = os.environ.get('DATABRICKS_HOST', 'https://community.cloud.databricks.com')
+# Try to load .env file if it exists (local development)
+try:
+    with open('.env', 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#'):
+                key, value = line.split('=', 1)
+                os.environ[key] = value
+    print("✅ Loaded .env file")
+except FileNotFoundError:
+    print("ℹ️ No .env file found - using system environment variables")
+
+# ============================================================
+# CONFIGURATION - Reads from Environment Variables
+# ============================================================
+
+DATABRICKS_HOST = os.environ.get('DATABRICKS_HOST', '')
 DATABRICKS_TOKEN = os.environ.get('DATABRICKS_TOKEN', '')
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
 GITHUB_DEV_REPO = os.environ.get('GITHUB_DEV_REPO', '')
 GITHUB_PROD_REPO = os.environ.get('GITHUB_PROD_REPO', '')
+
+print(f"🔑 GitHub configured: {bool(GITHUB_TOKEN)}")
+print(f"🔑 Databricks configured: {bool(DATABRICKS_TOKEN)}")
+print(f"📁 GitHub DEV Repo: {GITHUB_DEV_REPO}")
+print(f"📁 GitHub PROD Repo: {GITHUB_PROD_REPO}")
 
 # ============================================================
 # FLASK APP
 # ============================================================
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'databricks-app-secret')
+app.secret_key = os.environ.get('SECRET_KEY', 'default-secret-key-change-me')
 
 # ============================================================
-# DATABASE
+# DATABASE - Uses current directory (NO /dbfs)
 # ============================================================
+
+# Get the directory where app.py is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, 'orchestrator.db')
+
+print(f"📁 Database path: {DB_PATH}")
 
 def get_db():
-    os.makedirs('/dbfs/apps', exist_ok=True)
-    conn = sqlite3.connect('/dbfs/apps/orchestrator.db')
+    """Get database connection"""
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
-    with get_db() as conn:
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS change_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                project_id TEXT NOT NULL,
-                change_type TEXT NOT NULL,
-                description TEXT NOT NULL,
-                files_changed TEXT,
-                status TEXT DEFAULT 'PENDING',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                approved_at TIMESTAMP,
-                approved_by TEXT,
-                rejected_reason TEXT,
-                deployed_at TIMESTAMP,
-                deployed_by TEXT
-            )
-        ''')
-        
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS deployment_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                change_id INTEGER,
-                action TEXT,
-                status TEXT,
-                details TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        conn.commit()
+    """Initialize database with tables"""
+    try:
+        with get_db() as conn:
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS change_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id TEXT NOT NULL,
+                    change_type TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    files_changed TEXT,
+                    status TEXT DEFAULT 'PENDING',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    approved_at TIMESTAMP,
+                    approved_by TEXT,
+                    rejected_reason TEXT,
+                    deployed_at TIMESTAMP,
+                    deployed_by TEXT
+                )
+            ''')
+            
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS deployment_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    change_id INTEGER,
+                    action TEXT,
+                    status TEXT,
+                    details TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            conn.commit()
+            print("✅ Database initialized successfully")
+            return True
+    except Exception as e:
+        print(f"❌ Database initialization error: {e}")
+        return False
 
+# Initialize database
 init_db()
 
 # ============================================================
@@ -86,7 +121,8 @@ class GitHubClient:
                 data = response.json()
                 return [f for f in data.get('tree', []) if f['type'] == 'blob']
             return []
-        except:
+        except Exception as e:
+            print(f"Error getting files: {e}")
             return []
     
     def get_file_content(self, repo_name, file_path, branch='main'):
@@ -98,7 +134,8 @@ class GitHubClient:
                 content = base64.b64decode(data['content']).decode('utf-8')
                 return {'content': content, 'sha': data['sha']}
             return None
-        except:
+        except Exception as e:
+            print(f"Error getting file content: {e}")
             return None
     
     def compare_repos(self, dev_repo, prod_repo, branch='main'):
@@ -152,7 +189,8 @@ class GitHubClient:
                 response = requests.put(url, headers=self.headers, json=payload)
             
             return response.status_code in [200, 201]
-        except:
+        except Exception as e:
+            print(f"Error syncing file: {e}")
             return False
 
 # ============================================================
@@ -175,8 +213,7 @@ def index():
                          total_count=total,
                          recent_changes=recent,
                          github_dev=GITHUB_DEV_REPO,
-                         github_prod=GITHUB_PROD_REPO,
-                         databricks_host=DATABRICKS_HOST)
+                         github_prod=GITHUB_PROD_REPO)
 
 @app.route('/changes')
 def changes():
@@ -189,6 +226,17 @@ def approvals():
     with get_db() as conn:
         pending = conn.execute('SELECT * FROM change_requests WHERE status = "PENDING" ORDER BY created_at ASC').fetchall()
     return render_template('approvals.html', changes=pending)
+
+@app.route('/health')
+def health():
+    return jsonify({
+        'status': 'healthy',
+        'db_path': DB_PATH,
+        'github_dev': GITHUB_DEV_REPO,
+        'github_prod': GITHUB_PROD_REPO,
+        'databricks_configured': bool(DATABRICKS_TOKEN),
+        'github_configured': bool(GITHUB_TOKEN)
+    })
 
 # ============================================================
 # API ROUTES
@@ -301,7 +349,6 @@ def deploy_change(change_id):
             if change['status'] != 'APPROVED':
                 return jsonify({'success': False, 'error': 'Change must be approved first'}), 400
             
-            # Sync files
             sync_results = []
             if GITHUB_TOKEN and GITHUB_DEV_REPO and GITHUB_PROD_REPO:
                 client = GitHubClient(GITHUB_TOKEN)
@@ -337,25 +384,6 @@ def get_deployment_logs():
         logs = conn.execute('SELECT * FROM deployment_logs ORDER BY created_at DESC LIMIT 50').fetchall()
     return jsonify({'success': True, 'logs': [dict(log) for log in logs]})
 
-@app.route('/api/databricks/deploy', methods=['POST'])
-def databricks_deploy():
-    try:
-        data = request.json
-        environment = data.get('environment', 'dev')
-        bundle_path = data.get('bundle_path', '/Workspace/databricks-poc')
-        
-        if not DATABRICKS_TOKEN:
-            return jsonify({'success': False, 'error': 'Databricks token not configured'}), 400
-        
-        url = f'{DATABRICKS_HOST}/api/2.0/bundles/deploy'
-        payload = {'bundle_path': bundle_path, 'target': environment}
-        
-        response = requests.post(url, headers={'Authorization': f'Bearer {DATABRICKS_TOKEN}', 'Content-Type': 'application/json'}, json=payload)
-        
-        return jsonify({'success': True, 'result': response.json()})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
 @app.route('/test')
 def test():
     return render_template('test.html')
@@ -366,4 +394,10 @@ def test():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
+    print(f"🚀 Starting app on port {port}")
+    print(f"📁 Database: {DB_PATH}")
+    print(f"🔑 GitHub configured: {bool(GITHUB_TOKEN)}")
+    print(f"🔑 Databricks configured: {bool(DATABRICKS_TOKEN)}")
+    print(f"📁 GitHub DEV Repo: {GITHUB_DEV_REPO}")
+    print(f"📁 GitHub PROD Repo: {GITHUB_PROD_REPO}")
     app.run(host='0.0.0.0', port=port, debug=False)
