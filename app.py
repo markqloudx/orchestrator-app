@@ -10,11 +10,27 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default-secret-key')
 
 # ============================================================
-# ⚠️ GITHUB TOKEN - HARDCODED FOR DEMO
+# ⚠️ GITHUB TOKEN - PUT YOUR ACTUAL TOKEN HERE
 # ============================================================
 
-# Replace this with your actual GitHub token
-GITHUB_TOKEN = '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'  # ← PUT YOUR TOKEN HERE!
+# 🔑 PASTE YOUR TOKEN BETWEEN THE QUOTES
+GITHUB_TOKEN = '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'  # ← REPLACE THIS
+
+# ============================================================
+# DEBUG - Check if token is loaded
+# ============================================================
+
+print("=" * 60)
+print("🔑 GITHUB TOKEN DEBUG")
+print("=" * 60)
+print(f"Token exists: {bool(GITHUB_TOKEN)}")
+if GITHUB_TOKEN:
+    print(f"Token length: {len(GITHUB_TOKEN)}")
+    print(f"Token starts with 'ghp_': {GITHUB_TOKEN.startswith('ghp_')}")
+    print(f"Token: {GITHUB_TOKEN[:8]}...{GITHUB_TOKEN[-4:]}")
+else:
+    print("❌ TOKEN IS EMPTY!")
+print("=" * 60)
 
 # ============================================================
 # DATABASE
@@ -38,7 +54,6 @@ def get_db():
 def init_db():
     try:
         with get_db() as conn:
-            # Projects table
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS projects (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,7 +72,6 @@ def init_db():
                 )
             ''')
             
-            # Changes table
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS changes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,7 +101,6 @@ def init_db():
                 )
             ''')
             
-            # Audit Trail
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS audit_trail (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -120,17 +133,21 @@ class GitHubClient:
             'Authorization': f'token {token}',
             'Accept': 'application/vnd.github.v3+json'
         }
-        self.is_configured = bool(token)
+        self.is_configured = bool(token) and token.startswith('ghp_')
+        print(f"🔑 GitHub Client initialized: {self.is_configured}")
     
     def verify_repo(self, repo_name):
         if not self.is_configured:
+            print(f"❌ Not configured - skipping verify for {repo_name}")
             return False
         try:
-            r = requests.get(f'https://api.github.com/repos/{repo_name}', headers=self.headers)
-            print(f"🔍 Verifying repo {repo_name}: {r.status_code}")
+            url = f'https://api.github.com/repos/{repo_name}'
+            print(f"🔍 Verifying: {url}")
+            r = requests.get(url, headers=self.headers)
+            print(f"📡 Status: {r.status_code}")
             return r.status_code == 200
         except Exception as e:
-            print(f"❌ Error verifying repo: {e}")
+            print(f"❌ Error: {e}")
             return False
     
     def get_pull_requests(self, repo_name, state='open'):
@@ -168,10 +185,8 @@ class GitHubClient:
         payload = {'ref': ref}
         try:
             r = requests.post(url, headers=self.headers, json=payload)
-            print(f"🚀 Trigger GitHub Action: {r.status_code}")
             return r.status_code == 204
-        except Exception as e:
-            print(f"❌ Error triggering action: {e}")
+        except:
             return False
     
     def get_workflow_runs(self, repo_name, limit=1):
@@ -383,7 +398,7 @@ def api_verify_project(project_id):
             if not github_client or not github_client.is_configured:
                 return jsonify({
                     'success': False, 
-                    'error': 'GitHub not configured. Please set GITHUB_TOKEN.'
+                    'error': f'GitHub not configured. Token exists: {bool(GITHUB_TOKEN)}'
                 }), 400
             
             source_name = project['source_repo_name']
@@ -430,7 +445,7 @@ def api_sync_prs(project_id):
             if not github_client or not github_client.is_configured:
                 return jsonify({
                     'success': False, 
-                    'error': 'GitHub not configured. Please set GITHUB_TOKEN.'
+                    'error': f'GitHub not configured. Token exists: {bool(GITHUB_TOKEN)}'
                 }), 400
             
             source_name = project['source_repo_name']
@@ -621,7 +636,8 @@ if __name__ == '__main__':
     print(f"🔑 GitHub configured: {bool(GITHUB_TOKEN)}")
     if GITHUB_TOKEN:
         print(f"🔑 Token: {GITHUB_TOKEN[:10]}...{GITHUB_TOKEN[-4:]}")
+        print(f"🔑 Starts with ghp_: {GITHUB_TOKEN.startswith('ghp_')}")
     else:
-        print("⚠️  WARNING: GITHUB_TOKEN not set!")
+        print("⚠️  WARNING: GITHUB_TOKEN is EMPTY!")
     print("=" * 60)
     app.run(host='0.0.0.0', port=port, debug=False)
