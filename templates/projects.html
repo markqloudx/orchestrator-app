@@ -3,7 +3,7 @@
 {% block content %}
 
 <h1>Project Registry</h1>
-<p class="muted">Register projects with Source and Target repositories</p>
+<p class="muted">Register projects with Source and Target GitHub repositories</p>
 
 <button class="btn btn-red" onclick="openProjectModal()">+ Register Project</button>
 
@@ -19,26 +19,32 @@
                 <th>Target Repo</th>
                 <th>Branch</th>
                 <th>Status</th>
+                <th>Last Sync</th>
                 <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for p in projects %}
             <tr>
+                <td><strong>{{ p.project_id }}</strong><br><span class="muted">{{ p.name }}</span></td>
                 <td>
-                    <strong>{{ p.project_id }}</strong><br>
-                    <span class="muted">{{ p.name }}</span>
-                </td>
-                <td><span class="muted">{{ p.source_repo_name or p.source_repo_url or '-' }}</span></td>
-                <td><span class="muted">{{ p.target_repo_name or p.target_repo_url or '-' }}</span></td>
-                <td><code>{{ p.branch or 'main' }}</code></td>
-                <td>
-                    <span class="badge badge-{{ p.status.lower() if p.status else 'grey' }}">
-                        {{ p.status or 'PENDING' }}
+                    <span class="muted">{{ p.source_repo_name }}</span><br>
+                    <span class="badge badge-{{ p.source_status.lower() if p.source_status else 'grey' }}">
+                        {{ p.source_status or 'PENDING' }}
                     </span>
                 </td>
                 <td>
+                    <span class="muted">{{ p.target_repo_name }}</span><br>
+                    <span class="badge badge-{{ p.target_status.lower() if p.target_status else 'grey' }}">
+                        {{ p.target_status or 'PENDING' }}
+                    </span>
+                </td>
+                <td><code>{{ p.branch or 'main' }}</code></td>
+                <td><span class="badge badge-{{ p.status.lower() if p.status else 'grey' }}">{{ p.status or 'PENDING' }}</span></td>
+                <td>{% if p.last_sync %}{{ p.last_sync[:16] }}{% else %}-{% endif %}</td>
+                <td>
                     <button class="btn btn-small btn-green" onclick="verifyProject('{{ p.project_id }}')">Verify</button>
+                    <button class="btn btn-small" onclick="syncPRs('{{ p.project_id }}')">Sync PRs</button>
                     <button class="btn btn-small" onclick="deleteProject('{{ p.project_id }}')">🗑</button>
                 </td>
             </tr>
@@ -46,47 +52,18 @@
         </tbody>
     </table>
     {% else %}
-    <div style="text-align:center;padding:40px;color:#888;">
-        No projects registered. Click "+ Register Project" to get started.
-    </div>
+    <div style="text-align:center;padding:40px;color:#888;">No projects registered.</div>
     {% endif %}
 </div>
 
 <script>
 function openProjectModal() {
     const body = `
-        <div class="form-group">
-            <label>Project ID</label>
-            <input id="newProjectId" value="PRJ-${Math.floor(Math.random()*900+100)}">
-        </div>
-        <div class="form-group">
-            <label>Project Name</label>
-            <input id="newProjectName" placeholder="Enter project name">
-        </div>
-        <div class="form-group">
-            <label>Source Repository URL</label>
-            <input id="newSourceRepo" placeholder="https://github.com/username/source-repo">
-        </div>
-        <div class="form-group">
-            <label>Source Repository Name</label>
-            <input id="newSourceRepoName" placeholder="source-repo">
-        </div>
-        <div class="form-group">
-            <label>Target Repository URL</label>
-            <input id="newTargetRepo" placeholder="https://github.com/username/target-repo">
-        </div>
-        <div class="form-group">
-            <label>Target Repository Name</label>
-            <input id="newTargetRepoName" placeholder="target-repo">
-        </div>
-        <div class="form-group">
-            <label>Branch</label>
-            <input id="newBranch" value="main">
-        </div>
-        <div class="form-group">
-            <label>PROD Branch</label>
-            <input id="newProdBranch" value="main">
-        </div>
+        <div class="form-group"><label>Project ID</label><input id="newProjectId" value="PRJ-${Math.floor(Math.random()*900+100)}"></div>
+        <div class="form-group"><label>Project Name</label><input id="newProjectName" placeholder="Enter project name"></div>
+        <div class="form-group"><label>Source Repository URL</label><input id="newSourceRepo" placeholder="https://github.com/username/source-repo"></div>
+        <div class="form-group"><label>Target Repository URL</label><input id="newTargetRepo" placeholder="https://github.com/username/target-repo"></div>
+        <div class="form-group"><label>Branch</label><input id="newBranch" value="main"></div>
         <button class="btn btn-red" onclick="createProject()">Create</button>
     `;
     openModal('Register Project', body);
@@ -97,15 +74,12 @@ function createProject() {
         project_id: document.getElementById('newProjectId').value.trim(),
         name: document.getElementById('newProjectName').value.trim(),
         source_repo_url: document.getElementById('newSourceRepo').value.trim(),
-        source_repo_name: document.getElementById('newSourceRepoName').value.trim(),
         target_repo_url: document.getElementById('newTargetRepo').value.trim(),
-        target_repo_name: document.getElementById('newTargetRepoName').value.trim(),
-        branch: document.getElementById('newBranch').value.trim(),
-        prod_branch: document.getElementById('newProdBranch').value.trim()
+        branch: document.getElementById('newBranch').value.trim()
     };
     
     if (!data.project_id || !data.name || !data.source_repo_url || !data.target_repo_url) {
-        showToast('Please fill all required fields', 'error');
+        showToast('Please fill all fields', 'error');
         return;
     }
     
@@ -119,7 +93,7 @@ function createProject() {
     .then(r => r.json())
     .then(result => {
         if (result.success) {
-            showToast('✅ Project created!', 'success');
+            showToast('✅ Project created! ' + result.prs_synced + ' PRs synced.', 'success');
             closeModal();
             setTimeout(() => location.reload(), 1500);
         } else {
@@ -130,18 +104,34 @@ function createProject() {
 }
 
 function verifyProject(projectId) {
-    showToast('🔍 Verifying repositories...', 'info');
+    showToast('🔍 Verifying...', 'info');
     
     fetch('/api/projects/' + projectId + '/verify')
         .then(r => r.json())
         .then(data => {
             if (data.success) {
                 let msg = '✅ Verification complete!\n\n';
-                msg += 'Source Repo: ' + (data.source_valid ? '✅ Valid' : '❌ Invalid') + '\n';
-                msg += 'Target Repo: ' + (data.target_valid ? '✅ Valid' : '❌ Invalid') + '\n';
-                msg += 'Status: ' + data.status;
+                msg += 'Source: ' + (data.source_valid ? '✅ Connected' : '❌ Not Connected') + '\n';
+                msg += 'Target: ' + (data.target_valid ? '✅ Connected' : '❌ Not Connected') + '\n';
+                msg += 'PRs Synced: ' + data.prs_synced;
                 alert(msg);
                 showToast('✅ Verified!', 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showToast('❌ ' + data.error, 'error');
+            }
+        })
+        .catch(err => showToast('❌ Error: ' + err.message, 'error'));
+}
+
+function syncPRs(projectId) {
+    showToast('🔄 Syncing PRs...', 'info');
+    
+    fetch('/api/projects/' + projectId + '/sync-prs', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showToast('✅ Synced ' + data.synced + ' new PRs!', 'success');
                 setTimeout(() => location.reload(), 1000);
             } else {
                 showToast('❌ ' + data.error, 'error');

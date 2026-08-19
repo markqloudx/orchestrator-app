@@ -3,7 +3,7 @@
 {% block content %}
 
 <h1>Change Management Control Center</h1>
-<p class="muted">GitHub Repository → PR → Approval → Merge → PROD → Deploy</p>
+<p class="muted">Source Repo → PR → Approve → Merge → Trigger Action → Target Repo</p>
 <div class="red-line"></div>
 
 <div class="grid grid-4">
@@ -20,25 +20,25 @@
         <div class="metric-number green">{{ approved_count }}</div>
     </div>
     <div class="card">
-        <div class="metric-label">Deployed</div>
-        <div class="metric-number red">{{ deployed_count }}</div>
+        <div class="metric-label">Merged</div>
+        <div class="metric-number red">{{ merged_count }}</div>
     </div>
 </div>
 
 <br>
 
 <div class="card">
-    <h2>End-to-End Flow</h2>
+    <h2>Git to Git CI/CD Flow</h2>
     <div class="flow">
-        <div class="flow-node primary"><strong>GitHub</strong>Repository</div>
+        <div class="flow-node primary"><strong>Source Repo</strong>Origin</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node"><strong>PR</strong>Detected</div>
+        <div class="flow-node"><strong>PR</strong>Created</div>
         <div class="flow-arrow">→</div>
         <div class="flow-node primary"><strong>Approval</strong>Gate</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node"><strong>Merge</strong>to PROD</div>
+        <div class="flow-node"><strong>Merge</strong>Action</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-node primary"><strong>Databricks</strong>Deploy</div>
+        <div class="flow-node primary"><strong>Target Repo</strong>PROD</div>
     </div>
 </div>
 
@@ -58,16 +58,12 @@
         <h2>Recent Activity</h2>
         {% if changes %}
         <table>
-            <thead>
-                <tr>
-                    <th>Change</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
+            <thead><tr><th>Change</th><th>Project</th><th>Status</th></tr></thead>
             <tbody>
                 {% for c in changes %}
                 <tr>
                     <td>{{ c.change_id }}</td>
+                    <td>{{ c.project_id }}</td>
                     <td>
                         <span class="badge badge-{{ c.approval_status.lower() }}">{{ c.approval_status }}</span>
                         <span class="badge badge-{{ c.deployment_status.lower() }}">{{ c.deployment_status }}</span>

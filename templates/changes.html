@@ -3,181 +3,106 @@
 {% block content %}
 
 <h1>Change Register</h1>
-<p class="muted">All Pull Requests from the repository</p>
+<p class="muted">All Pull Requests with GitHub Action Status</p>
 
-<button class="btn btn-green" onclick="syncPRs()">🔄 Sync PRs from GitHub</button>
-<button class="btn btn-red" onclick="openChangeModal()">+ Manual Change</button>
+<button class="btn btn-green" onclick="syncPRs()">🔄 Sync PRs</button>
 
 <br><br>
 
 <div class="card">
-    <div style="overflow-x:auto;">
-        <table>
-            <thead>
-                <tr>
-                    <th>Change ID</th>
-                    <th>Project</th>
-                    <th>PR #</th>
-                    <th>Title</th>
-                    <th>Author</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for c in changes %}
-                <tr>
-                    <td><strong>{{ c.change_id }}</strong></td>
-                    <td>{{ c.project_id }}</td>
-                    <td>
-                        {% if c.pr_number %}
-                        <a href="{{ c.pr_url }}" target="_blank">#{{ c.pr_number }}</a>
+    {% if changes %}
+    <table>
+        <thead>
+            <tr>
+                <th>Change ID</th>
+                <th>Project</th>
+                <th>PR #</th>
+                <th>Title</th>
+                <th>Author</th>
+                <th>Status</th>
+                <th>GitHub Action</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in changes %}
+            <tr id="change-row-{{ c.change_id }}">
+                <td><strong>{{ c.change_id }}</strong></td>
+                <td>{{ c.project_id }}</td>
+                <td>
+                    {% if c.pr_number %}
+                    <a href="{{ c.pr_url }}" target="_blank">#{{ c.pr_number }}</a>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td>{{ c.pr_title or c.title or '-' }}</td>
+                <td>{{ c.pr_author or '-' }}</td>
+                <td>
+                    <span class="badge badge-{{ c.approval_status.lower() }}">{{ c.approval_status }}</span>
+                    <span class="badge badge-{{ c.deployment_status.lower() }}">{{ c.deployment_status }}</span>
+                </td>
+                <td id="action-cell-{{ c.change_id }}">
+                    {% if c.github_action_run_id %}
+                        <span class="badge badge-{{ c.github_action_status.lower() }}" id="action-status-{{ c.change_id }}">
+                            {{ c.github_action_status }}
+                        </span>
+                        {% if c.github_action_url %}
+                        <a href="{{ c.github_action_url }}" target="_blank">🔗</a>
+                        {% endif %}
+                    {% else %}
+                        <span class="badge badge-notriggered">Not Triggered</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if c.approval_status == 'PENDING' %}
+                    <button class="btn btn-small btn-green" onclick="approveChange('{{ c.change_id }}')">Approve</button>
+                    <button class="btn btn-small" onclick="rejectChange('{{ c.change_id }}')">Reject</button>
+                    {% elif c.approval_status == 'APPROVED' and c.deployment_status != 'MERGED' %}
+                    <button class="btn btn-small btn-red" onclick="mergeChange('{{ c.change_id }}')">🚀 Merge & Trigger Action</button>
+                    {% elif c.deployment_status == 'MERGED' %}
+                        {% if c.github_action_status == 'RUNNING' %}
+                        <button class="btn btn-small" onclick="checkActionStatus('{{ c.change_id }}')">🔄 Check Status</button>
+                        {% elif c.github_action_status == 'SUCCESS' %}
+                        <span class="badge badge-success">✅ Action Success</span>
+                        {% elif c.github_action_status == 'FAILED' %}
+                        <span class="badge badge-failed">❌ Action Failed</span>
+                        <button class="btn btn-small" onclick="checkActionStatus('{{ c.change_id }}')">🔄 Retry</button>
                         {% else %}
-                        -
+                        <button class="btn btn-small" onclick="checkActionStatus('{{ c.change_id }}')">📊 Check Status</button>
                         {% endif %}
-                    </td>
-                    <td>{{ c.pr_title or c.title or '-' }}</td>
-                    <td>{{ c.pr_author or '-' }}</td>
-                    <td>
-                        <span class="badge badge-{{ c.approval_status.lower() }}">{{ c.approval_status }}</span>
-                        <span class="badge badge-{{ c.deployment_status.lower() }}">{{ c.deployment_status }}</span>
-                        {% if c.conflict_message %}
-                        <span class="badge badge-conflict">⚠️ Conflict</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if c.approval_status == 'PENDING' %}
-                        <button class="btn btn-small btn-green" onclick="approveChange('{{ c.change_id }}')">Approve</button>
-                        <button class="btn btn-small" onclick="rejectChange('{{ c.change_id }}')">Reject</button>
-                        {% elif c.approval_status == 'APPROVED' and c.deployment_status != 'MERGED' %}
-                        <button class="btn btn-small btn-red" onclick="mergeChange('{{ c.change_id }}')">Merge</button>
-                        {% elif c.deployment_status == 'MERGED' and c.deployment_status != 'DEPLOYED' %}
-                        <button class="btn btn-small" onclick="deployChange('{{ c.change_id }}')">Deploy</button>
-                        {% elif c.deployment_status == 'DEPLOYED' %}
-                        <span class="badge badge-ok">✅ Deployed</span>
-                        {% elif c.approval_status == 'REJECTED' %}
-                        <span class="badge badge-fail">Rejected</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+                    {% elif c.approval_status == 'REJECTED' %}
+                    <span class="badge badge-fail">Rejected</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="text-align:center;padding:40px;color:#888;">No changes yet. Sync PRs from Source repository.</div>
+    {% endif %}
 </div>
 
 <script>
-// ============================================================
-// SYNC PRs FROM GITHUB
-// ============================================================
-
 function syncPRs() {
-    const projectId = prompt('Enter Project ID to sync PRs (e.g., PRJ-001):');
+    const projectId = prompt('Enter Project ID (e.g., PRJ-001):');
     if (!projectId) return;
     
-    showToast('🔄 Syncing PRs from GitHub...', 'info');
+    showToast('🔄 Syncing PRs...', 'info');
     
-    fetch('/api/projects/' + projectId + '/sync-prs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            showToast('✅ Synced ' + data.synced + ' new PRs!', 'success');
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            showToast('❌ ' + data.error, 'error');
-        }
-    })
-    .catch(err => showToast('❌ Error: ' + err.message, 'error'));
-}
-
-// ============================================================
-// OPEN CHANGE MODAL
-// ============================================================
-
-function openChangeModal() {
-    const projects = {{ projects|tojson }};
-    const options = projects.map(p => 
-        `<option value="${p.project_id}">${p.project_id} — ${p.name}</option>`
-    ).join('');
-    
-    const body = `
-        <div class="form-group">
-            <label>Project</label>
-            <select id="changeProject">${options}</select>
-        </div>
-        <div class="form-group">
-            <label>Title</label>
-            <input id="changeTitle" placeholder="Enter change title">
-        </div>
-        <div class="form-group">
-            <label>Description</label>
-            <textarea id="changeDescription" placeholder="Describe the change..."></textarea>
-        </div>
-        <div class="form-group">
-            <label>Source Branch</label>
-            <input id="changeSourceBranch" value="feature/branch">
-        </div>
-        <div class="form-group">
-            <label>Target Branch</label>
-            <input id="changeTargetBranch" value="main">
-        </div>
-        <div class="form-group">
-            <label>Files Changed (comma separated)</label>
-            <input id="changeFiles" placeholder="file1.py, file2.py">
-        </div>
-        <button class="btn btn-red" onclick="createChange()">Create Change</button>
-    `;
-    openModal('Create Change Request', body);
-}
-
-function createChange() {
-    const project_id = document.getElementById('changeProject').value;
-    const title = document.getElementById('changeTitle').value.trim();
-    const description = document.getElementById('changeDescription').value.trim();
-    const source_branch = document.getElementById('changeSourceBranch').value.trim();
-    const target_branch = document.getElementById('changeTargetBranch').value.trim();
-    const files = document.getElementById('changeFiles').value.trim().split(',').map(f => f.trim()).filter(f => f);
-    
-    if (!project_id || !title) {
-        showToast('Please fill all required fields', 'error');
-        return;
-    }
-    
-    const files_changed = files.map(f => ({ file: f, type: 'modified' }));
-    
-    showToast('⏳ Creating change...', 'info');
-    
-    fetch('/api/changes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            project_id: project_id,
-            title: title,
-            description: description,
-            source_branch: source_branch,
-            target_branch: target_branch,
-            files_changed: files_changed
+    fetch('/api/projects/' + projectId + '/sync-prs', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showToast('✅ Synced ' + data.synced + ' new PRs!', 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast('❌ ' + data.error, 'error');
+            }
         })
-    })
-    .then(r => r.json())
-    .then(result => {
-        if (result.success) {
-            showToast('✅ Change ' + result.data.change_id + ' created!', 'success');
-            closeModal();
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            showToast('❌ ' + result.error, 'error');
-        }
-    })
-    .catch(err => showToast('❌ Error: ' + err.message, 'error'));
+        .catch(err => showToast('❌ Error: ' + err.message, 'error'));
 }
-
-// ============================================================
-// APPROVAL ACTIONS
-// ============================================================
 
 function approveChange(changeId) {
     if (!confirm('Approve change ' + changeId + '?')) return;
@@ -189,17 +114,13 @@ function approveChange(changeId) {
                 showToast('✅ Approved!', 'success');
                 setTimeout(() => location.reload(), 1000);
             } else {
-                if (data.conflict) {
-                    showToast('⚠️ ' + data.error, 'conflict');
-                } else {
-                    showToast('❌ ' + data.error, 'error');
-                }
+                showToast('❌ ' + data.error, 'error');
             }
         });
 }
 
 function rejectChange(changeId) {
-    const reason = prompt('Reason for rejection:');
+    const reason = prompt('Reason:');
     if (reason === null) return;
     
     fetch('/api/changes/' + changeId + '/reject', {
@@ -219,38 +140,62 @@ function rejectChange(changeId) {
 }
 
 function mergeChange(changeId) {
-    if (!confirm('Merge change ' + changeId + '?')) return;
+    if (!confirm('Merge and trigger GitHub Action?')) return;
+    
+    showToast('⏳ Merging and triggering GitHub Action...', 'info');
     
     fetch('/api/changes/' + changeId + '/merge', { method: 'POST' })
         .then(r => r.json())
         .then(data => {
             if (data.success) {
-                showToast('✅ Merged!', 'success');
-                setTimeout(() => location.reload(), 1000);
-            } else {
-                if (data.conflict) {
-                    showToast('⚠️ ' + data.error, 'conflict');
-                } else {
-                    showToast('❌ ' + data.error, 'error');
-                }
-            }
-        });
-}
-
-function deployChange(changeId) {
-    if (!confirm('Deploy to Databricks?')) return;
-    
-    fetch('/api/changes/' + changeId + '/deploy', { method: 'POST' })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                showToast('✅ Deployed to Databricks!', 'success');
-                setTimeout(() => location.reload(), 1000);
+                showToast('✅ ' + (data.message || 'Action triggered!'), 'success');
+                setTimeout(() => location.reload(), 2000);
             } else {
                 showToast('❌ ' + data.error, 'error');
             }
-        });
+        })
+        .catch(err => showToast('❌ Error: ' + err.message, 'error'));
 }
+
+function checkActionStatus(changeId) {
+    showToast('🔍 Checking GitHub Action status...', 'info');
+    
+    fetch('/api/changes/' + changeId + '/action-status')
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const statusEl = document.getElementById('action-status-' + changeId);
+                if (statusEl) {
+                    statusEl.className = 'badge badge-' + data.status.toLowerCase();
+                    statusEl.textContent = data.display || data.status;
+                }
+                showToast('Status: ' + (data.display || data.status), 'info');
+                if (data.url) {
+                    window.open(data.url, '_blank');
+                }
+            } else {
+                showToast('❌ ' + data.error, 'error');
+            }
+        })
+        .catch(err => showToast('❌ Error: ' + err.message, 'error'));
+}
+
+// Auto-refresh action status every 30 seconds
+setInterval(() => {
+    document.querySelectorAll('[id^="action-status-"]').forEach(el => {
+        if (el.textContent === 'RUNNING' || el.textContent === 'PENDING') {
+            const changeId = el.id.replace('action-status-', '');
+            fetch('/api/changes/' + changeId + '/action-status')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.status !== el.textContent) {
+                        el.className = 'badge badge-' + data.status.toLowerCase();
+                        el.textContent = data.display || data.status;
+                    }
+                });
+        }
+    });
+}, 30000);
 </script>
 
 {% endblock %}
