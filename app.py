@@ -5,29 +5,49 @@ import requests
 import sqlite3
 import random
 from datetime import datetime
+from cryptography.fernet import Fernet
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default-secret-key')
 
 # ============================================================
-# 🔑 GITHUB TOKEN - YOUR WORKING TOKEN
+# 🔐 YOUR GITHUB TOKEN - Encrypted
 # ============================================================
 
-GITHUB_TOKEN = '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'
+ENCRYPTION_KEY = 'qBSYCPll3KbIXjrVhV1hfiaRKYyMaajgTN5u22baW9A='
+ENCRYPTED_GITHUB_TOKEN = 'gAAAAABqhtC7V30MjWpFb_YSeJE7WOdSdWoqtM_RxQHqrRu1sij1LDxH48wTjMDKpuzZ9cE9KYf_Eu_jIF5crHibcaGg_VuieJbAOdjO7Be0T7RizsBUfpiJt19w85MP8H6eFebq3DSG'
+
+def decrypt_token(encrypted_token):
+    try:
+        f = Fernet(ENCRYPTION_KEY.encode())
+        return f.decrypt(encrypted_token.encode()).decode()
+    except Exception as e:
+        print(f"❌ Decryption failed: {e}")
+        return None
+
+print("=" * 60)
+print("🔑 LOADING GITHUB TOKEN")
+print("=" * 60)
+
+GITHUB_TOKEN = decrypt_token(ENCRYPTED_GITHUB_TOKEN)
+
+if not GITHUB_TOKEN:
+    GITHUB_TOKEN = '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'
+    print("⚠️ Using hardcoded fallback token.")
+
+if GITHUB_TOKEN:
+    print(f"✅ Token loaded! Length: {len(GITHUB_TOKEN)}")
+else:
+    print("❌ No GitHub token found!")
+print("=" * 60)
 
 # ============================================================
 # DATABASE
 # ============================================================
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = '/tmp' if os.path.exists('/tmp') else os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'orchestrator.db')
-
-if os.path.exists(DB_PATH):
-    try:
-        os.remove(DB_PATH)
-        print("🗑️ Fresh database created!")
-    except:
-        pass
+print(f"📁 Database: {DB_PATH}")
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -37,7 +57,6 @@ def get_db():
 def init_db():
     try:
         with get_db() as conn:
-            # Projects table
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS projects (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +75,6 @@ def init_db():
                 )
             ''')
             
-            # Changes table
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS changes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,7 +104,6 @@ def init_db():
                 )
             ''')
             
-            # Audit Trail
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS audit_trail (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,7 +161,8 @@ class GitHubClient:
             if response.status_code == 200:
                 return response.json()
             return []
-        except:
+        except Exception as e:
+            print(f"❌ Error fetching PRs: {e}")
             return []
     
     def get_pr_files(self, repo_name, pr_number):
@@ -160,7 +178,6 @@ class GitHubClient:
             return []
     
     def trigger_github_action_sync(self, target_repo, source_repo, branch='main', pr_number=''):
-        """Trigger GitHub Action to sync source → target and close PR"""
         if not self.is_configured:
             return False
         
@@ -178,13 +195,7 @@ class GitHubClient:
             print(f"📝 PR #{pr_number} will be closed after sync")
             response = requests.post(url, headers=self.headers, json=payload)
             print(f"📡 Status: {response.status_code}")
-            
-            if response.status_code == 204:
-                print(f"✅ GitHub Action triggered successfully!")
-                return True
-            else:
-                print(f"❌ Failed to trigger action: {response.status_code}")
-                return False
+            return response.status_code == 204
         except Exception as e:
             print(f"❌ Exception: {e}")
             return False
@@ -395,7 +406,7 @@ def api_verify_project(project_id):
                 return jsonify({'success': False, 'error': 'Project not found'}), 404
             
             if not github_client or not github_client.is_configured:
-                return jsonify({'success': False, 'error': 'GitHub not configured'}), 400
+                return jsonify({'success': False, 'error': 'GitHub not configured.'}), 400
             
             source_name = project['source_repo_name']
             target_name = project['target_repo_name']
@@ -439,7 +450,7 @@ def api_sync_prs(project_id):
                 return jsonify({'success': False, 'error': 'Project not found'}), 404
             
             if not github_client or not github_client.is_configured:
-                return jsonify({'success': False, 'error': 'GitHub not configured'}), 400
+                return jsonify({'success': False, 'error': 'GitHub not configured.'}), 400
             
             source_name = project['source_repo_name']
             synced = github_client.sync_prs_to_db(source_name, project_id)
@@ -539,7 +550,7 @@ def api_merge_change(change_id):
             branch = project['branch'] or 'main'
             pr_number = change['pr_number']
             
-            # Trigger GitHub Action to sync DEV → PROD and close PR
+            # Trigger GitHub Action
             action_triggered = github_client.trigger_github_action_sync(
                 target_repo=target_repo,
                 source_repo=source_repo,
@@ -580,7 +591,7 @@ def api_merge_change(change_id):
                 INSERT INTO audit_trail (event, change_id, project_id, result, details)
                 VALUES (?, ?, ?, ?, ?)
             ''', ('GitHub Action Triggered', change_id, change['project_id'], 'MERGED', 
-                  f'PR #{pr_number} synced from {source_repo} → {target_repo} and closed'))
+                  f'PR #{pr_number} synced from {source_repo} → {target_repo}'))
             conn.commit()
             
             change = conn.execute('SELECT * FROM changes WHERE change_id = ?', (change_id,)).fetchone()
@@ -668,7 +679,32 @@ def api_get_action_status(change_id):
         
         return jsonify({'success': True, 'status': change['github_action_status']})
 
-# ============================================================ 
+# ============================================================
+# DELETE PROJECT
+# ============================================================
+
+@app.route('/api/projects/<project_id>', methods=['DELETE'])
+def api_delete_project(project_id):
+    try:
+        with get_db() as conn:
+            project = conn.execute('SELECT * FROM projects WHERE project_id = ?', (project_id,)).fetchone()
+            if not project:
+                return jsonify({'success': False, 'error': 'Project not found'}), 404
+            
+            conn.execute('DELETE FROM changes WHERE project_id = ?', (project_id,))
+            conn.execute('DELETE FROM projects WHERE project_id = ?', (project_id,))
+            
+            conn.execute('''
+                INSERT INTO audit_trail (event, project_id, result, details)
+                VALUES (?, ?, ?, ?)
+            ''', ('Project Deleted', project_id, 'SUCCESS', f'Project {project_id} deleted'))
+            conn.commit()
+            
+            return jsonify({'success': True, 'message': f'Project {project_id} deleted'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ============================================================
 # RUN APP
 # ============================================================
 
@@ -678,8 +714,6 @@ if __name__ == '__main__':
     print("🚀 GIT TO GIT CI/CD ORCHESTRATOR")
     print("=" * 60)
     print(f"📡 Server running on port: {port}")
-    print(f"🔑 GitHub configured: {bool(GITHUB_TOKEN)}")
-    if GITHUB_TOKEN:
-        print(f"🔑 Token: {GITHUB_TOKEN[:10]}...{GITHUB_TOKEN[-4:]}")
+    print(f"🔑 Token loaded: {'✅' if GITHUB_TOKEN else '❌'}")
     print("=" * 60)
     app.run(host='0.0.0.0', port=port, debug=False)
